@@ -173,7 +173,6 @@ case "$cmd" in
     security add-generic-password -a "$CLAUDE_PROXY_USER" -s "$CLAUDE_PROXY_KEYCHAIN_SERVICE" -U -w
     echo "OK: host/user updated, password saved in Keychain"
     ;;
-
   uninstall)
     ensure_conf; load_conf
     echo "This will remove proxied-claude, claude-proxy, config, and Keychain password."
@@ -219,11 +218,9 @@ case "$cmd" in
     echo
     echo "✅  Done! proxied-claude has been uninstalled."
     ;;
-
   update)
     curl -fsSL https://raw.githubusercontent.com/r0mm4k/proxied-claude/main/install.sh | bash
     ;;
-
   *)
     cat <<EOC
 Usage:
