@@ -267,14 +267,18 @@ proxied-claude
 ## Uninstall
 
 ```bash
-# Remove wrapper and control utility
+chmod +x ./uninstall.sh
+./uninstall.sh
+```
+
+The script will remove the binaries, config directory, and Keychain password automatically.
+
+Or manually:
+
+```bash
 sudo rm -f /usr/local/bin/proxied-claude
 sudo rm -f /usr/local/bin/claude-proxy
-
-# Remove config
 rm -rf ~/.config/proxied-claude
-
-# Remove password from Keychain
 # Replace YOUR_USER with your proxy username
 security delete-generic-password -a YOUR_USER -s claude-proxy
 ```
