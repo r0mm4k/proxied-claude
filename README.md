@@ -264,6 +264,22 @@ proxied-claude
 
 ---
 
+## Uninstall
+
+```bash
+# Remove wrapper and control utility
+sudo rm -f /usr/local/bin/proxied-claude
+sudo rm -f /usr/local/bin/claude-proxy
+
+# Remove config
+rm -rf ~/.config/proxied-claude
+
+# Remove password from Keychain
+security delete-generic-password -a YOUR_USER -s claude-proxy
+```
+
+---
+
 ## Limitations
 
 - macOS only (Keychain dependency)
