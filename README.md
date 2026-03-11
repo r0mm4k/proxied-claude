@@ -275,6 +275,7 @@ sudo rm -f /usr/local/bin/claude-proxy
 rm -rf ~/.config/proxied-claude
 
 # Remove password from Keychain
+# Replace YOUR_USER with your proxy username
 security delete-generic-password -a YOUR_USER -s claude-proxy
 ```
 
