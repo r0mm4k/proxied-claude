@@ -2,6 +2,7 @@
 set -euo pipefail
 
 # ====== Settings you may want to change ======
+VERSION="1.0.0"
 CLAUDE_BIN_DEFAULT="/opt/homebrew/bin/claude"
 CONF_DIR="$HOME/.config/proxied-claude"
 CONF_FILE="$CONF_DIR/proxy.conf"
