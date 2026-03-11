@@ -133,6 +133,10 @@ cmd="${1:-}"
 shift || true
 
 case "$cmd" in
+  version)
+    echo "claude-proxy 1.0.0"
+    ;;
+
   status)
     ensure_conf
     cat "$CONF"
@@ -220,6 +224,7 @@ case "$cmd" in
   *)
     cat <<EOC
 Usage:
+  claude-proxy version
   claude-proxy status
   claude-proxy set-host  IP:PORT
   claude-proxy set-user  USER
