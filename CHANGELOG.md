@@ -18,7 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `set-user` — change proxy user
   - `set-password` — update password in Keychain
   - `set-all` — set host + user + password in one go
-  - `update` — update to latest version from GitHub
+  - `update` — update to latest version from GitHub (preserves existing config and Keychain password)
   - `uninstall` — remove all installed files and Keychain entry
 - Password stored securely in **macOS Keychain** — never written to disk in plaintext
 - `localhost` excluded from proxying via `NO_PROXY` (WebStorm / IDE bridge support)
+- Re-running `install.sh` detects existing config and offers to keep current settings
