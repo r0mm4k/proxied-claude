@@ -219,7 +219,10 @@ case "$cmd" in
     echo "✅  Done! proxied-claude has been uninstalled."
     ;;
   update)
-    curl -fsSL https://raw.githubusercontent.com/r0mm4k/proxied-claude/main/install.sh | bash
+    TMP=$(mktemp)
+    curl -fsSL https://raw.githubusercontent.com/r0mm4k/proxied-claude/main/install.sh -o "$TMP"
+    bash "$TMP"
+    rm -f "$TMP"
     ;;
   *)
     cat <<EOC
