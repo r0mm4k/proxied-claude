@@ -68,12 +68,16 @@ fi
 # ── 3. Write config file ─────────────────────────────────────────────────────
 step "Writing config"
 mkdir -p "$CONF_DIR"
-cat > "$CONF_FILE" <<EOF
+if [[ "$SKIP_PASSWORD" == "false" ]]; then
+  cat > "$CONF_FILE" <<EOF
 CLAUDE_PROXY_HOST="${PROXY_HOST}"
 CLAUDE_PROXY_USER="${PROXY_USER}"
 CLAUDE_PROXY_KEYCHAIN_SERVICE="${KEYCHAIN_SERVICE}"
 EOF
-echo "Config: $CONF_FILE"
+  echo "Config: $CONF_FILE"
+else
+  echo "Skipping — keeping existing config"
+fi
 
 # ── 4. Create wrapper: proxied-claude ────────────────────────────────────────
 step "Installing wrapper (sudo required)"
