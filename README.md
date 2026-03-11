@@ -225,9 +225,6 @@ Restart the IDE.
 ### Manage proxy settings
 
 ```bash
-# Show version
-claude-proxy version
-
 # Update to latest version
 claude-proxy update
 
