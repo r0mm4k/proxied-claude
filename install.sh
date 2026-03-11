@@ -2,7 +2,6 @@
 set -euo pipefail
 
 # ====== Settings you may want to change ======
-VERSION="1.0.0"
 CLAUDE_BIN_DEFAULT="/opt/homebrew/bin/claude"
 CONF_DIR="$HOME/.config/proxied-claude"
 CONF_FILE="$CONF_DIR/proxy.conf"
@@ -133,10 +132,6 @@ cmd="${1:-}"
 shift || true
 
 case "$cmd" in
-  version)
-    echo "claude-proxy 1.0.0"
-    ;;
-
   status)
     ensure_conf
     cat "$CONF"
@@ -224,7 +219,6 @@ case "$cmd" in
   *)
     cat <<EOC
 Usage:
-  claude-proxy version
   claude-proxy status
   claude-proxy set-host  IP:PORT
   claude-proxy set-user  USER
