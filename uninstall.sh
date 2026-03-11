@@ -13,8 +13,16 @@ echo "== Claude Proxy Uninstall =="
 
 # ── 1. Remove wrapper and control utility ────────────────────────────────────
 step "Removing binaries (sudo required)"
-sudo rm -f "$WRAPPER_PATH" && echo "OK: removed $WRAPPER_PATH" || echo "SKIP: $WRAPPER_PATH not found"
-sudo rm -f "$CTL_PATH"     && echo "OK: removed $CTL_PATH"     || echo "SKIP: $CTL_PATH not found"
+if [[ -f "$WRAPPER_PATH" ]]; then
+  sudo rm "$WRAPPER_PATH" && echo "OK: removed $WRAPPER_PATH"
+else
+  echo "SKIP: $WRAPPER_PATH not found"
+fi
+if [[ -f "$CTL_PATH" ]]; then
+  sudo rm "$CTL_PATH" && echo "OK: removed $CTL_PATH"
+else
+  echo "SKIP: $CTL_PATH not found"
+fi
 
 # ── 2. Remove password from Keychain ─────────────────────────────────────────
 step "Removing Keychain password"
