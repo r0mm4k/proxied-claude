@@ -181,6 +181,8 @@ Usage:
   claude-proxy set-user  USER
   claude-proxy set-password
   claude-proxy set-all   IP:PORT USER
+  claude-proxy update
+  claude-proxy uninstall
 EOC
     exit 1
     ;;
@@ -223,6 +225,12 @@ Restart the IDE.
 ### Manage proxy settings
 
 ```bash
+# Update to latest version
+claude-proxy update
+
+# Uninstall
+claude-proxy uninstall
+
 # Show current config
 claude-proxy status
 
@@ -267,20 +275,7 @@ proxied-claude
 ## Uninstall
 
 ```bash
-chmod +x ./uninstall.sh
-./uninstall.sh
-```
-
-The script will remove the binaries, config directory, and Keychain password automatically.
-
-Or manually:
-
-```bash
-sudo rm -f /usr/local/bin/proxied-claude
-sudo rm -f /usr/local/bin/claude-proxy
-rm -rf ~/.config/proxied-claude
-# Replace YOUR_USER with your proxy username
-security delete-generic-password -a YOUR_USER -s claude-proxy
+claude-proxy uninstall
 ```
 
 ---
