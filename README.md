@@ -173,6 +173,57 @@ case "$cmd" in
     security add-generic-password -a "$CLAUDE_PROXY_USER" -s "$CLAUDE_PROXY_KEYCHAIN_SERVICE" -U -w
     echo "OK: host/user updated, password saved in Keychain"
     ;;
+
+  uninstall)
+    ensure_conf; load_conf
+    echo "This will remove proxied-claude, claude-proxy, config, and Keychain password."
+    read -r -p "Are you sure? [y/N] " confirm
+    [[ "${confirm:-}" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 0; }
+
+    WRAPPER_PATH="/usr/local/bin/proxied-claude"
+    CTL_PATH="/usr/local/bin/claude-proxy"
+    CONF_DIR="$HOME/.config/proxied-claude"
+
+    if [[ -f "$WRAPPER_PATH" ]]; then
+      sudo rm "$WRAPPER_PATH" && echo "OK: removed $WRAPPER_PATH"
+    else
+      echo "SKIP: $WRAPPER_PATH not found"
+    fi
+
+    if [[ -f "$CTL_PATH" ]]; then
+      sudo rm "$CTL_PATH" && echo "OK: removed $CTL_PATH"
+    else
+      echo "SKIP: $CTL_PATH not found"
+    fi
+
+    KEYCHAIN_USER="${CLAUDE_PROXY_USER:-}"
+    KEYCHAIN_SERVICE="${CLAUDE_PROXY_KEYCHAIN_SERVICE:-claude-proxy}"
+    if [[ -n "$KEYCHAIN_USER" ]]; then
+      if security delete-generic-password \
+          -a "$KEYCHAIN_USER" \
+          -s "$KEYCHAIN_SERVICE" 2>/dev/null; then
+        echo "OK: removed Keychain entry (service=$KEYCHAIN_SERVICE, account=$KEYCHAIN_USER)"
+      else
+        echo "SKIP: Keychain entry not found"
+      fi
+    else
+      echo "SKIP: no user in config, skipping Keychain cleanup"
+    fi
+
+    if [[ -d "$CONF_DIR" ]]; then
+      rm -rf "$CONF_DIR" && echo "OK: removed $CONF_DIR"
+    else
+      echo "SKIP: $CONF_DIR not found"
+    fi
+
+    echo
+    echo "✅  Done! proxied-claude has been uninstalled."
+    ;;
+
+  update)
+    curl -fsSL https://raw.githubusercontent.com/r0mm4k/proxied-claude/main/install.sh | bash
+    ;;
+
   *)
     cat <<EOC
 Usage:
