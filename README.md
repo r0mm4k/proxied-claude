@@ -220,9 +220,9 @@ case "$cmd" in
     ;;
   update)
     TMP=$(mktemp)
+    trap 'rm -f "$TMP"' EXIT
     curl -fsSL https://raw.githubusercontent.com/r0mm4k/proxied-claude/main/install.sh -o "$TMP"
     bash "$TMP"
-    rm -f "$TMP"
     ;;
   *)
     cat <<EOC
