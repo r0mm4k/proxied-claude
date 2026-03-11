@@ -35,14 +35,35 @@ echo "Claude binary: $CLAUDE_BIN"
 
 # ── 2. Gather proxy settings ─────────────────────────────────────────────────
 step "Proxy configuration"
-read -r -p "Proxy host (IP:PORT): " PROXY_HOST
-[[ -n "${PROXY_HOST}" ]] || die "Proxy host is required."
 
-read -r -p "Proxy user: " PROXY_USER
-[[ -n "${PROXY_USER}" ]] || die "Proxy user is required."
+SKIP_PASSWORD=false
 
-read -r -p "Keychain service name [${KEYCHAIN_SERVICE_DEFAULT}]: " KEYCHAIN_SERVICE
-KEYCHAIN_SERVICE="${KEYCHAIN_SERVICE:-$KEYCHAIN_SERVICE_DEFAULT}"
+if [[ -f "$CONF_FILE" ]]; then
+  # shellcheck disable=SC1090
+  source "$CONF_FILE"
+  echo "Existing config found:"
+  echo "  Host: ${CLAUDE_PROXY_HOST}"
+  echo "  User: ${CLAUDE_PROXY_USER}"
+  read -r -p "Keep current settings? [Y/n] " keep
+  if [[ ! "${keep:-}" =~ ^[Nn]$ ]]; then
+    PROXY_HOST="$CLAUDE_PROXY_HOST"
+    PROXY_USER="$CLAUDE_PROXY_USER"
+    KEYCHAIN_SERVICE="${CLAUDE_PROXY_KEYCHAIN_SERVICE:-$KEYCHAIN_SERVICE_DEFAULT}"
+    SKIP_PASSWORD=true
+    echo "OK: keeping current settings"
+  fi
+fi
+
+if [[ "$SKIP_PASSWORD" == "false" ]]; then
+  read -r -p "Proxy host (IP:PORT): " PROXY_HOST
+  [[ -n "${PROXY_HOST}" ]] || die "Proxy host is required."
+
+  read -r -p "Proxy user: " PROXY_USER
+  [[ -n "${PROXY_USER}" ]] || die "Proxy user is required."
+
+  read -r -p "Keychain service name [${KEYCHAIN_SERVICE_DEFAULT}]: " KEYCHAIN_SERVICE
+  KEYCHAIN_SERVICE="${KEYCHAIN_SERVICE:-$KEYCHAIN_SERVICE_DEFAULT}"
+fi
 
 # ── 3. Write config file ─────────────────────────────────────────────────────
 step "Writing config"
@@ -236,8 +257,12 @@ echo "OK: $CTL_PATH"
 
 # ── 6. Save password to Keychain ─────────────────────────────────────────────
 step "Saving password to Keychain"
-security add-generic-password -a "$PROXY_USER" -s "$KEYCHAIN_SERVICE" -U -w
-echo "OK: password stored"
+if [[ "$SKIP_PASSWORD" == "true" ]]; then
+  echo "Skipping — keeping existing Keychain entry"
+else
+  security add-generic-password -a "$PROXY_USER" -s "$KEYCHAIN_SERVICE" -U -w
+  echo "OK: password stored"
+fi
 
 # ── Done ─────────────────────────────────────────────────────────────────────
 echo
