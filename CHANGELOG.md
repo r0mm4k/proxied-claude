@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.0] - 2026-03-12
+
+### Added
+- `claude-proxy check` — verifies proxy connectivity in three steps:
+  TCP reachability, proxy auth + CONNECT tunnel, Anthropic API reachability (`/v1/models`)
+- Fallback TCP reachability check via `curl` when `nc` (netcat) is not available
+
+### Fixed
+- `claude-proxy check` now validates that the proxy host is in `IP:PORT` format before
+  attempting a TCP connection — previously a missing port caused a cryptic `nc` error
+
+### Documentation
+- Limitations: noted that proxy password is briefly visible in `ps aux` during
+  `claude-proxy check` (passed to `curl` via `--proxy`)
+
+---
+
 ## [1.0.0] - 2026-03-11
 
 ### Added
