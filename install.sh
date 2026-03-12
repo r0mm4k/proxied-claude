@@ -203,8 +203,8 @@ case "$cmd" in
       -w 2>/dev/null || true)"
     [[ -n "$PASS" ]] || die "Proxy password not found in Keychain"
 
-    PROXY_URL="http://${CLAUDE_PROXY_USER}:${PASS}@${CLAUDE_PROXY_HOST}"
     TARGET="https://api.anthropic.com"
+    PROXY_URL="http://${CLAUDE_PROXY_USER}:${PASS}@${CLAUDE_PROXY_HOST}"
 
     echo "Checking proxy: ${CLAUDE_PROXY_HOST}"
     echo "User:           ${CLAUDE_PROXY_USER}"
