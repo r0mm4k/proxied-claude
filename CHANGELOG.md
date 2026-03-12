@@ -10,8 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.1.0] - 2026-03-12
 
 ### Added
-- `claude-proxy check` — verifies proxy connectivity in three steps:
-  TCP reachability, proxy auth + CONNECT tunnel, Anthropic API reachability (`/v1/models`)
+- `claude-proxy check` — verifies proxy connectivity in two steps:
+  TCP reachability and Anthropic API reachability (`/v1/models`) through the proxy
 - Fallback TCP reachability check via `curl` when `nc` (netcat) is not available
 
 ### Fixed
