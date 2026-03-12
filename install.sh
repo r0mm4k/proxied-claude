@@ -191,6 +191,100 @@ case "$cmd" in
     echo "OK: host/user updated, password saved in Keychain"
     ;;
 
+  check)
+    ensure_conf; load_conf
+
+    [[ -n "${CLAUDE_PROXY_HOST:-}" ]] || die "Proxy host not set (run: claude-proxy set-host IP:PORT)"
+    [[ -n "${CLAUDE_PROXY_USER:-}" ]] || die "Proxy user not set (run: claude-proxy set-user USER)"
+
+    PASS="$(security find-generic-password \
+      -a "$CLAUDE_PROXY_USER" \
+      -s "$CLAUDE_PROXY_KEYCHAIN_SERVICE" \
+      -w 2>/dev/null || true)"
+    [[ -n "$PASS" ]] || die "Proxy password not found in Keychain"
+
+    PROXY_URL="http://${CLAUDE_PROXY_USER}:${PASS}@${CLAUDE_PROXY_HOST}"
+    TARGET="https://api.anthropic.com"
+
+    echo "Checking proxy: ${CLAUDE_PROXY_HOST}"
+    echo "User:           ${CLAUDE_PROXY_USER}"
+    echo "Target:         ${TARGET}"
+    echo
+
+    # ── 1. TCP reachability ────────────────────────────────────────────────
+    PROXY_IP="${CLAUDE_PROXY_HOST%%:*}"
+    PROXY_PORT="${CLAUDE_PROXY_HOST##*:}"
+    [[ "$PROXY_PORT" =~ ^[0-9]+$ ]] || die "Invalid proxy host format, expected IP:PORT (got: $CLAUDE_PROXY_HOST)"
+
+    printf "  %-35s" "TCP connect to proxy..."
+    _tcp_ok=false
+    if command -v nc >/dev/null 2>&1; then
+      nc -z -w 5 "$PROXY_IP" "$PROXY_PORT" 2>/dev/null && _tcp_ok=true || true
+    elif curl -s --max-time 5 -o /dev/null \
+        "http://$PROXY_IP:$PROXY_PORT" 2>/dev/null; then
+      _tcp_ok=true
+    fi
+    if [[ "$_tcp_ok" == "true" ]]; then
+      echo "✅  OK"
+    else
+      echo "❌  FAILED (host unreachable or port closed)"
+      exit 1
+    fi
+
+    # ── 2. Proxy auth + CONNECT tunnel ────────────────────────────────────
+    printf "  %-35s" "Proxy auth + CONNECT tunnel..."
+    HTTP_CODE="$(curl -s -o /dev/null -w "%{http_code}" \
+      --max-time 15 \
+      --proxy "$PROXY_URL" \
+      --proxytunnel \
+      "$TARGET" 2>/dev/null || true)"
+
+    case "$HTTP_CODE" in
+      200|301|302|307|308)
+        echo "✅  OK (HTTP $HTTP_CODE)"
+        ;;
+      407)
+        echo "❌  FAILED — proxy auth rejected (HTTP 407)"
+        echo
+        echo "Tip: update password with: claude-proxy set-password"
+        exit 1
+        ;;
+      000)
+        echo "❌  FAILED — no response / timeout"
+        exit 1
+        ;;
+      *)
+        echo "⚠️   Unexpected HTTP $HTTP_CODE (may still work)"
+        ;;
+    esac
+
+    # ── 3. Anthropic API reachability ─────────────────────────────────────
+    printf "  %-35s" "Anthropic API reachability..."
+    API_CODE="$(curl -s -o /dev/null -w "%{http_code}" \
+      --max-time 15 \
+      --proxy "$PROXY_URL" \
+      --proxytunnel \
+      "${TARGET}/v1/models" \
+      -H "x-api-key: invalid-check" \
+      -H "anthropic-version: 2023-06-01" 2>/dev/null || true)"
+
+    case "$API_CODE" in
+      200|401|403)
+        echo "✅  OK (HTTP $API_CODE — API is reachable)"
+        ;;
+      000)
+        echo "❌  FAILED — no response / timeout"
+        exit 1
+        ;;
+      *)
+        echo "⚠️   HTTP $API_CODE — unexpected, but proxy tunnel works"
+        ;;
+    esac
+
+    echo
+    echo "✅  Proxy is working correctly."
+    ;;
+
   uninstall)
     ensure_conf; load_conf
     echo "This will remove proxied-claude, claude-proxy, config, and Keychain password."
@@ -252,6 +346,7 @@ Usage:
   claude-proxy set-user  USER
   claude-proxy set-password
   claude-proxy set-all   IP:PORT USER
+  claude-proxy check
   claude-proxy update
   claude-proxy uninstall
 EOC
