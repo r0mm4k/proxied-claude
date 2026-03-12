@@ -231,34 +231,7 @@ case "$cmd" in
       exit 1
     fi
 
-    # ── 2. Proxy auth + CONNECT tunnel ────────────────────────────────────
-    printf "  %-35s" "Proxy auth + CONNECT tunnel..."
-    HTTP_CODE="$(curl -s -o /dev/null -w "%{http_code}" \
-      --max-time 15 \
-      --proxy "$PROXY_URL" \
-      --proxytunnel \
-      "$TARGET" 2>/dev/null || true)"
-
-    case "$HTTP_CODE" in
-      200|301|302|307|308)
-        echo "✅  OK (HTTP $HTTP_CODE)"
-        ;;
-      407)
-        echo "❌  FAILED — proxy auth rejected (HTTP 407)"
-        echo
-        echo "Tip: update password with: claude-proxy set-password"
-        exit 1
-        ;;
-      000)
-        echo "❌  FAILED — no response / timeout"
-        exit 1
-        ;;
-      *)
-        echo "⚠️   Unexpected HTTP $HTTP_CODE (may still work)"
-        ;;
-    esac
-
-    # ── 3. Anthropic API reachability ─────────────────────────────────────
+    # ── 2. Anthropic API reachability ─────────────────────────────────────
     printf "  %-35s" "Anthropic API reachability..."
     API_CODE="$(curl -s -o /dev/null -w "%{http_code}" \
       --max-time 15 \
