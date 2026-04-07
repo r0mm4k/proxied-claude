@@ -35,11 +35,44 @@ Planned improvements for future iterations.
 - [ ] 6. **`claude-proxy update --version <n>`** — pin to a specific release instead of
   always pulling `main`.
 
+- [ ] 7. **Directory-based auto-switch** — automatically use the right profile based on
+  current directory. A `.proxied-claude-profile` file in a repo root (or per-dir mapping
+  in conf) overrides `active_profile` for that session. Works like `git config --local`:
+  ```bash
+  echo "work" > ~/work/myproject/.proxied-claude-profile
+  # proxied-claude in that dir picks up 'work' profile automatically
+  ```
+
+- [ ] 8. **Failover proxies** — define multiple proxies per profile; `proxied-claude` tries
+  them in order if the first is unreachable:
+  ```
+  PROFILE_PROXIES="corp-lt corp-backup"
+  ```
+
+- [ ] 9. **`claude-proxy proxy create --test`** — immediately run `proxy check` after
+  creating a proxy to verify it works, without a separate command.
+
+- [ ] 10. **`claude-proxy profile set-description <profile> <text>`** — store a
+  human-readable note in the profile conf, shown in `list` and `status`:
+  ```
+  work     corp-lt   Work Team account  ◀ active
+  personal (none)    Personal Pro
+  ```
+
+- [ ] 11. **`--json` output** — machine-readable output for `status`, `profile list`,
+  `proxy list`. Useful for scripting and IDE integrations.
+
+- [ ] 12. **Shell prompt integration** — show active profile in `$PS1`, similar to
+  git branch display. Ships as an optional snippet in README.
+
+- [ ] 13. **`claude-proxy proxy check --watch`** — periodic proxy health monitoring,
+  re-checking at a given interval until interrupted.
+
 ---
 
 ## Installation
 
-- [ ] 7. **Install a specific version** — respect `VERSION` env var in `install.sh` and
+- [ ] 14. **Install a specific version** — respect `VERSION` env var in `install.sh` and
   download tagged assets instead of always fetching from `main`:
   ```bash
   VERSION=2.0.0 bash <(curl -fsSL .../install.sh)
@@ -49,14 +82,14 @@ Planned improvements for future iterations.
 
 ## CI / DX
 
-- [ ] 8. **GitHub Actions** — auto-run `bats proxied-claude.bats` on push and pull requests.
+- [ ] 15. **GitHub Actions** — auto-run `bats proxied-claude.bats` on push and pull requests.
 
-- [ ] 9. **Shell completions (zsh / bash)** — tab-complete subcommands, profile names,
+- [ ] 16. **Shell completions (zsh / bash)** — tab-complete subcommands, profile names,
   and proxy names.
 
 ---
 
 ## Platform
 
-- [ ] 10. **Linux support** — replace macOS `security` CLI with a pluggable Keychain backend:
+- [ ] 17. **Linux support** — replace macOS `security` CLI with a pluggable Keychain backend:
   `secret-tool` (GNOME Keyring), `pass`, or a permissions-restricted file as fallback.
