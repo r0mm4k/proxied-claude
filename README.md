@@ -1,379 +1,25 @@
-# Claude CLI + Corporate Proxy (macOS)
+# proxied-claude — Claude Code with corporate proxy and multiple accounts (macOS)
 
-Unofficial wrapper that runs [Claude CLI](https://docs.anthropic.com/en/docs/claude-code) through a corporate **HTTP CONNECT** proxy on macOS, with the password stored securely in **Keychain**.
+Run [Claude Code](https://docs.anthropic.com/en/docs/claude-code) behind a **corporate HTTP proxy** on macOS, with full support for **multiple Claude accounts** (profiles) and **multiple named proxies** — passwords stored securely in **macOS Keychain**.
 
-> ⚠️ This is an independent community tool, not affiliated with or endorsed by Anthropic.  
-> You need your own Claude subscription or API access.
+![macOS only](https://img.shields.io/badge/platform-macOS-lightgrey)
+![requires Homebrew](https://img.shields.io/badge/requires-Homebrew-orange)
+![Claude Code](https://img.shields.io/badge/Claude-Code-blueviolet)
+![License MIT](https://img.shields.io/badge/license-MIT-green)
+![Version](https://img.shields.io/badge/version-2.0.0-blue)
 
----
-
-## Features
-
-- Proxy applied automatically on every `proxied-claude` run
-- Password stored in **macOS Keychain** — never written to disk in plaintext
-- `localhost` is **not** proxied (WebStorm / IDE bridge keeps working)
-- `claude-proxy` utility for easy host / user / password management
+> ⚠️ Independent community tool — not affiliated with or endorsed by Anthropic.
+> You need your own Claude subscription.
 
 ---
 
-## Requirements
-
-- macOS (uses `security` CLI for Keychain access)
-- [Homebrew](https://brew.sh)
-- Claude CLI (installed automatically if missing)
-
----
-
-## Quick install
-
-```bash
-chmod +x ./install.sh
-./install.sh
-```
-
-The script will:
-1. Install Claude CLI via Homebrew if not present
-2. Ask for proxy host (`IP:PORT`), username, and Keychain service name
-3. Save the password to Keychain (interactive prompt)
-4. Create `/usr/local/bin/proxied-claude` — the wrapper
-5. Create `/usr/local/bin/claude-proxy` — the control utility
-
----
-
-## Manual install
-
-### 1. Install Claude CLI
-
-```bash
-brew install claude
-claude --version
-```
-
-### 2. Create config directory
-
-```bash
-mkdir -p ~/.config/proxied-claude
-```
-
-Config file: `~/.config/proxied-claude/proxy.conf`
-
-### 3. Create wrapper: `proxied-claude`
-
-```bash
-sudo nano /usr/local/bin/proxied-claude
-```
-
-```bash
-#!/bin/bash
-set -euo pipefail
-
-CLAUDE_BIN="/opt/homebrew/bin/claude"
-CONF="$HOME/.config/proxied-claude/proxy.conf"
-
-die() { echo "ERROR: $*" >&2; exit 1; }
-
-[[ -x "$CLAUDE_BIN" ]] || die "Claude binary not found: $CLAUDE_BIN"
-[[ -f "$CONF" ]] || die "Proxy config not found: $CONF (run: claude-proxy set-all IP:PORT USER)"
-
-# shellcheck disable=SC1090
-source "$CONF"
-
-: "${CLAUDE_PROXY_HOST:?Missing CLAUDE_PROXY_HOST}"
-: "${CLAUDE_PROXY_USER:?Missing CLAUDE_PROXY_USER}"
-: "${CLAUDE_PROXY_KEYCHAIN_SERVICE:=claude-proxy}"
-
-PASS="$(security find-generic-password -a "$CLAUDE_PROXY_USER" -s "$CLAUDE_PROXY_KEYCHAIN_SERVICE" -w 2>/dev/null || true)"
-[[ -n "$PASS" ]] || die "Proxy password not found in Keychain (service=$CLAUDE_PROXY_KEYCHAIN_SERVICE, account=$CLAUDE_PROXY_USER)"
-
-PROXY="http://${CLAUDE_PROXY_USER}:${PASS}@${CLAUDE_PROXY_HOST}"
-
-export HTTPS_PROXY="$PROXY"
-export HTTP_PROXY="$PROXY"
-# Do not proxy localhost — keeps the IDE ↔ Claude bridge working
-export NO_PROXY="localhost,127.0.0.1,::1,::ffff:127.0.0.1"
-export no_proxy="$NO_PROXY"
-
-exec "$CLAUDE_BIN" "$@"
-```
-
-```bash
-sudo chmod +x /usr/local/bin/proxied-claude
-```
-
-### 4. Create control utility: `claude-proxy`
-
-```bash
-sudo nano /usr/local/bin/claude-proxy
-```
-
-```bash
-#!/bin/bash
-set -euo pipefail
-
-CONF="$HOME/.config/proxied-claude/proxy.conf"
-DIR="$(dirname "$CONF")"
-
-die() { echo "ERROR: $*" >&2; exit 1; }
-
-ensure_conf() {
-  mkdir -p "$DIR"
-  if [[ ! -f "$CONF" ]]; then
-    cat > "$CONF" <<'EOC'
-CLAUDE_PROXY_HOST=""
-CLAUDE_PROXY_USER=""
-CLAUDE_PROXY_KEYCHAIN_SERVICE="claude-proxy"
-EOC
-  fi
-}
-
-load_conf() {
-  # shellcheck disable=SC1090
-  source "$CONF"
-  : "${CLAUDE_PROXY_KEYCHAIN_SERVICE:=claude-proxy}"
-}
-
-write_conf() {
-  cat > "$CONF" <<EOC
-CLAUDE_PROXY_HOST="${CLAUDE_PROXY_HOST}"
-CLAUDE_PROXY_USER="${CLAUDE_PROXY_USER}"
-CLAUDE_PROXY_KEYCHAIN_SERVICE="${CLAUDE_PROXY_KEYCHAIN_SERVICE}"
-EOC
-}
-
-cmd="${1:-}"
-shift || true
-
-case "$cmd" in
-  status)
-    ensure_conf
-    cat "$CONF"
-    ;;
-  set-host)
-    [[ $# -eq 1 ]] || die "Usage: claude-proxy set-host IP:PORT"
-    ensure_conf; load_conf
-    CLAUDE_PROXY_HOST="$1"; write_conf
-    echo "OK: host → $CLAUDE_PROXY_HOST"
-    ;;
-  set-user)
-    [[ $# -eq 1 ]] || die "Usage: claude-proxy set-user USER"
-    ensure_conf; load_conf
-    CLAUDE_PROXY_USER="$1"; write_conf
-    echo "OK: user → $CLAUDE_PROXY_USER"
-    ;;
-  set-password)
-    ensure_conf; load_conf
-    [[ -n "${CLAUDE_PROXY_USER:-}" ]] || die "Set user first: claude-proxy set-user USER"
-    security add-generic-password -a "$CLAUDE_PROXY_USER" -s "$CLAUDE_PROXY_KEYCHAIN_SERVICE" -U -w
-    echo "OK: password updated in Keychain"
-    ;;
-  set-all)
-    [[ $# -eq 2 ]] || die "Usage: claude-proxy set-all IP:PORT USER"
-    ensure_conf; load_conf
-    CLAUDE_PROXY_HOST="$1"; CLAUDE_PROXY_USER="$2"; write_conf
-    security add-generic-password -a "$CLAUDE_PROXY_USER" -s "$CLAUDE_PROXY_KEYCHAIN_SERVICE" -U -w
-    echo "OK: host/user updated, password saved in Keychain"
-    ;;
-  check)
-    ensure_conf; load_conf
-
-    [[ -n "${CLAUDE_PROXY_HOST:-}" ]] || die "Proxy host not set (run: claude-proxy set-host IP:PORT)"
-    [[ -n "${CLAUDE_PROXY_USER:-}" ]] || die "Proxy user not set (run: claude-proxy set-user USER)"
-
-    PASS="$(security find-generic-password \
-      -a "$CLAUDE_PROXY_USER" \
-      -s "$CLAUDE_PROXY_KEYCHAIN_SERVICE" \
-      -w 2>/dev/null || true)"
-    [[ -n "$PASS" ]] || die "Proxy password not found in Keychain"
-
-    TARGET="https://api.anthropic.com"
-    PROXY_URL="http://${CLAUDE_PROXY_USER}:${PASS}@${CLAUDE_PROXY_HOST}"
-
-    echo "Checking proxy: ${CLAUDE_PROXY_HOST}"
-    echo "User:           ${CLAUDE_PROXY_USER}"
-    echo "Target:         ${TARGET}"
-    echo
-
-    PROXY_IP="${CLAUDE_PROXY_HOST%%:*}"
-    PROXY_PORT="${CLAUDE_PROXY_HOST##*:}"
-    [[ "$PROXY_PORT" =~ ^[0-9]+$ ]] || die "Invalid proxy host format, expected IP:PORT (got: $CLAUDE_PROXY_HOST)"
-
-    printf "  %-35s" "TCP connect to proxy..."
-    _tcp_ok=false
-    if command -v nc >/dev/null 2>&1; then
-      nc -z -w 5 "$PROXY_IP" "$PROXY_PORT" 2>/dev/null && _tcp_ok=true || true
-    elif curl -s --max-time 5 -o /dev/null \
-        "http://$PROXY_IP:$PROXY_PORT" 2>/dev/null; then
-      _tcp_ok=true
-    fi
-    if [[ "$_tcp_ok" == "true" ]]; then
-      echo "✅  OK"
-    else
-      echo "❌  FAILED (host unreachable or port closed)"
-      exit 1
-    fi
-
-    printf "  %-35s" "Anthropic API reachability..."
-    API_CODE="$(curl -s -o /dev/null -w "%{http_code}" \
-      --max-time 15 \
-      --proxy "$PROXY_URL" \
-      --proxytunnel \
-      "${TARGET}/v1/models" \
-      -H "x-api-key: invalid-check" \
-      -H "anthropic-version: 2023-06-01" 2>/dev/null || true)"
-
-    case "$API_CODE" in
-      200|401|403)
-        echo "✅  OK (HTTP $API_CODE — API is reachable)"
-        ;;
-      000)
-        echo "❌  FAILED — no response / timeout"
-        exit 1
-        ;;
-      *)
-        echo "⚠️   HTTP $API_CODE — unexpected, but proxy tunnel works"
-        ;;
-    esac
-
-    echo
-    echo "✅  Proxy is working correctly."
-    ;;
-  uninstall)
-    ensure_conf; load_conf
-    echo "This will remove proxied-claude, claude-proxy, config, and Keychain password."
-    read -r -p "Are you sure? [y/N] " confirm
-    [[ "${confirm:-}" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 0; }
-
-    WRAPPER_PATH="/usr/local/bin/proxied-claude"
-    CTL_PATH="/usr/local/bin/claude-proxy"
-    CONF_DIR="$HOME/.config/proxied-claude"
-
-    if [[ -f "$WRAPPER_PATH" ]]; then
-      sudo rm "$WRAPPER_PATH" && echo "OK: removed $WRAPPER_PATH"
-    else
-      echo "SKIP: $WRAPPER_PATH not found"
-    fi
-
-    if [[ -f "$CTL_PATH" ]]; then
-      sudo rm "$CTL_PATH" && echo "OK: removed $CTL_PATH"
-    else
-      echo "SKIP: $CTL_PATH not found"
-    fi
-
-    KEYCHAIN_USER="${CLAUDE_PROXY_USER:-}"
-    KEYCHAIN_SERVICE="${CLAUDE_PROXY_KEYCHAIN_SERVICE:-claude-proxy}"
-    if [[ -n "$KEYCHAIN_USER" ]]; then
-      if security delete-generic-password \
-          -a "$KEYCHAIN_USER" \
-          -s "$KEYCHAIN_SERVICE" 2>/dev/null; then
-        echo "OK: removed Keychain entry (service=$KEYCHAIN_SERVICE, account=$KEYCHAIN_USER)"
-      else
-        echo "SKIP: Keychain entry not found"
-      fi
-    else
-      echo "SKIP: no user in config, skipping Keychain cleanup"
-    fi
-
-    if [[ -d "$CONF_DIR" ]]; then
-      rm -rf "$CONF_DIR" && echo "OK: removed $CONF_DIR"
-    else
-      echo "SKIP: $CONF_DIR not found"
-    fi
-
-    echo
-    echo "✅  Done! proxied-claude has been uninstalled."
-    ;;
-  update)
-    TMP=$(mktemp)
-    trap 'rm -f "$TMP"' EXIT
-    curl -fsSL https://raw.githubusercontent.com/r0mm4k/proxied-claude/main/install.sh -o "$TMP"
-    bash "$TMP"
-    ;;
-  *)
-    cat <<EOC
-Usage:
-  claude-proxy status
-  claude-proxy set-host  IP:PORT
-  claude-proxy set-user  USER
-  claude-proxy set-password
-  claude-proxy set-all   IP:PORT USER
-  claude-proxy check
-  claude-proxy update
-  claude-proxy uninstall
-EOC
-    exit 1
-    ;;
-esac
-```
-
-```bash
-sudo chmod +x /usr/local/bin/claude-proxy
-```
-
-### 5. Save password to Keychain
-
-```bash
-# Replace YOUR_USER with your proxy username
-security add-generic-password -a YOUR_USER -s claude-proxy -U -w
-```
-
----
-
-## WebStorm / JetBrains IDE integration
-
-### 1. Install the plugin
-
-**Settings → Plugins → Marketplace** → search for **Claude Code [Beta]** → Install → Restart IDE.
-
-### 2. Configure the Claude command
-
-**Settings → Tools → Claude Code [Beta]** → Claude command:
-
-```
-/usr/local/bin/proxied-claude
-```
-
-Restart the IDE.
-
----
-
-## Usage
-
-### Manage proxy settings
-
-```bash
-# Update to latest version
-claude-proxy update
-
-# Uninstall
-claude-proxy uninstall
-
-# Show current config
-claude-proxy status
-
-# Set host + user + password in one go
-claude-proxy set-all 10.0.0.1:3128 john
-
-# Change only host
-claude-proxy set-host 10.0.0.1:3128
-
-# Change only user
-claude-proxy set-user john
-
-# Update password (prompts securely)
-claude-proxy set-password
-
-# Check proxy connectivity and Anthropic API reachability
-claude-proxy check
-```
-
-### Run Claude through the proxy
-
-```bash
-proxied-claude --version
-proxied-claude
-```
-
-> Tip: `claude-proxy` manages config + Keychain; `proxied-claude` runs Claude with `HTTP_PROXY`/`HTTPS_PROXY` set.
+## Who is this for?
+
+Developers who:
+- Work behind a **corporate HTTP proxy** and need Claude Code to route through it
+- Use **multiple Claude accounts** (e.g. a work Team account and a personal Pro account)
+- Want **separate Claude sessions** per account — different history, login, and settings
+- Use **JetBrains** or **VS Code** with Claude Code and need one command that always picks the right account and proxy
 
 ---
 
@@ -381,31 +27,346 @@ proxied-claude
 
 ```
 proxied-claude
-  └─ reads ~/.config/proxied-claude/proxy.conf
-  └─ fetches password from macOS Keychain
-  └─ sets HTTP_PROXY / HTTPS_PROXY
+  └─ reads ~/.config/proxied-claude/active_profile
+  └─ loads profiles/<n>.conf       → CLAUDE_CONFIG_DIR, linked proxy name
+  └─ loads proxies/<proxy>.conf    → host, user, keychain service name
+  └─ fetches password from macOS Keychain (never written to disk)
+  └─ exports CLAUDE_CONFIG_DIR + HTTP_PROXY / HTTPS_PROXY
   └─ exec → claude (original binary)
 ```
 
-`localhost` is always excluded from proxying via `NO_PROXY`, so the IDE ↔ Claude bridge is unaffected.
+The wrapper is intentionally thin (~100 lines) — no migration, no self-repair, no overhead. All management is done by `claude-proxy`.
+
+**Default profile:** A profile named `default` is created automatically on install and points to `~/.claude` — the standard Claude Code directory. If you never create additional profiles, everything works exactly as before.
+
+`localhost` is always excluded from proxying (`NO_PROXY`), so the IDE ↔ Claude bridge keeps working.
 
 ---
 
-## Uninstall
+## Requirements
+
+- macOS (uses `security` CLI for Keychain)
+- [Homebrew](https://brew.sh)
+- Claude Code (auto-installed if missing)
+
+---
+
+## Install
 
 ```bash
-claude-proxy uninstall
+chmod +x ./install.sh
+./install.sh
 ```
+
+The installer:
+1. Installs Claude Code via Homebrew if not present
+2. Installs `/usr/local/bin/proxied-claude` — the wrapper
+3. Installs `/usr/local/bin/claude-proxy` — the control utility
+4. **Auto-migrates** any existing v1 config (`proxy.conf`) — your proxy settings and Keychain password are preserved automatically
+5. Creates a `default` profile pointing to `~/.claude` (if not already present)
+6. Optionally walks you through creating an additional profile and proxy
+
+> **Just want proxy without profiles?** Press Enter to skip the wizard. The `default` profile is created automatically and points to your existing `~/.claude` — everything works exactly as before, just with proxy support.
+
+---
+
+## Upgrading from v1
+
+If you used the previous version of proxied-claude (with `proxy.conf`), just run:
+
+```bash
+claude-proxy update
+```
+
+Your proxy settings are migrated automatically:
+- `proxy.conf` → `profiles/default.conf` + `proxies/default.conf`
+- Keychain entry renamed from `claude-proxy` → `claude-proxy:default`
+- Old Keychain entry removed
+- `proxy.conf` renamed to `proxy.conf.migrated` (safe to delete)
+
+Everything works exactly as before — no action needed.
+
+---
+
+## Quick start
+
+```bash
+# 1. Create named proxies
+claude-proxy proxy create corp-lt 10.0.0.1:3128 john
+claude-proxy proxy create home-de 192.168.1.1:8080 roman
+
+# 2. Create profiles, optionally copying settings from default
+claude-proxy profile create work --from default
+claude-proxy profile create personal
+
+# 3. Link proxies to profiles
+claude-proxy profile set-proxy work     corp-lt
+claude-proxy profile set-proxy personal home-de
+
+# 4. Switch active profile
+claude-proxy use work
+
+# 5. Run Claude — picks up the active profile automatically
+proxied-claude
+```
+
+---
+
+## Commands
+
+### Profiles
+
+Each profile is one Claude account with its own isolated config directory and an optional linked proxy. The `default` profile always points to `~/.claude` and cannot be deleted.
+
+```bash
+claude-proxy profile list
+# Lists all profiles with proxy and directory info
+
+claude-proxy profile create <n> [--from <source>]
+# Creates a new profile → ~/.claude-<n>
+# --from <source>: copies settings from <source> profile
+# Without --from: interactively asks which profile to copy settings from
+
+claude-proxy profile delete <n>
+# Deletes profile config (cannot delete 'default' or the active profile)
+# Claude dir (~/.claude-<n>) is kept on disk
+
+claude-proxy profile rename <old> <new>
+# Renames a profile and moves its Claude dir
+# Auto-generated dirs are renamed; custom dirs are kept as-is
+
+claude-proxy profile use <n>
+# Switches the active profile
+
+claude-proxy profile show [<n>]
+# Shows profile details: name, Claude dir, proxy, host, user
+# Without argument: shows the active profile
+
+claude-proxy profile set-proxy <profile> <proxy>
+# Links a proxy to a profile
+
+claude-proxy profile unset-proxy <profile>
+# Removes proxy link — profile runs with a direct connection
+
+claude-proxy profile copy-settings <profile> --from <source>
+# Copies portable config files from <source> to <profile>
+# Does NOT copy: auth tokens, chat history, credentials
+```
+
+### Proxies
+
+Named, reusable proxy configurations. Passwords live in macOS Keychain only — never in plain files.
+
+```bash
+claude-proxy proxy list
+# Lists all proxies with host/user and which profiles use them
+
+claude-proxy proxy create <n> <host:port> <user>
+# Creates proxy config + saves password to Keychain
+
+claude-proxy proxy delete <n>
+# Deletes proxy config + removes Keychain entry
+# Auto-unlinks all profiles that reference the proxy
+
+claude-proxy proxy rename <old> <new>
+# Renames proxy, migrates Keychain entry, updates all linked profiles
+
+claude-proxy proxy set-password <n>
+# Updates password in Keychain
+
+claude-proxy proxy show <n>
+# Shows proxy details (password is never shown)
+
+claude-proxy proxy check <n>
+# Tests three levels:
+#   1. TCP connect to proxy host
+#   2. Proxy authentication (detects HTTP 407)
+#   3. Anthropic API reachability via CONNECT tunnel
+```
+
+### Shortcuts
+
+```bash
+claude-proxy use <n>     # → profile use
+claude-proxy status         # → full overview (active profile + all profiles + all proxies)
+claude-proxy check          # → proxy check for the active profile's proxy
+claude-proxy version        # print version
+claude-proxy migrate        # manually trigger v1 → v2 migration
+claude-proxy update         # re-download latest from GitHub (preserves all config)
+claude-proxy uninstall      # remove binaries + config (keeps ~/.claude* dirs)
+```
+
+---
+
+## Config layout
+
+```
+~/.config/proxied-claude/
+  active_profile              ← name of the currently active profile
+  .lock/                      ← concurrency lock (auto-managed)
+  profiles/
+    default.conf              ← always exists, points to ~/.claude
+    work.conf
+    personal.conf
+  proxies/
+    default.conf              ← migrated from proxy.conf (if existed)
+    corp-lt.conf
+    home-de.conf
+
+~/.claude/                    ← default profile (standard Claude dir)
+~/.claude-work/               ← isolated session for "work"
+~/.claude-personal/           ← isolated session for "personal"
+```
+
+---
+
+## Examples
+
+### v1 upgrade — nothing to do
+
+```bash
+claude-proxy update
+# ── Migrating v1 config ──
+# ✅  Proxy password migrated → Keychain: claude-proxy:default
+# ✅  Old Keychain entry 'claude-proxy' removed
+# ✅  Created proxies/default.conf (john@10.0.0.1:3128)
+# ✅  Created profiles/default.conf → ~/.claude
+# ✅  Old config saved as proxy.conf.migrated
+# ── Installing proxied-claude ──
+# ✅  /usr/local/bin/proxied-claude
+# ── Installing claude-proxy ──
+# ✅  /usr/local/bin/claude-proxy
+# ✅  Upgrade complete.
+```
+
+### Work + personal accounts, different proxies
+
+```bash
+# Create work profile with settings copied from default
+claude-proxy profile create work --from default
+claude-proxy profile set-proxy work corp-lt
+
+# Create personal profile (clean, no proxy)
+claude-proxy profile create personal
+
+# Switch and run
+claude-proxy use work
+proxied-claude          # work account, corp-lt proxy
+
+claude-proxy use personal
+proxied-claude          # personal account, no proxy
+```
+
+### Copy settings to an existing profile
+
+```bash
+# Copy only portable settings — no tokens, no history
+claude-proxy profile copy-settings personal --from work
+```
+
+### Rename a profile or proxy
+
+```bash
+# Rename profile (moves ~/.claude-work → ~/.claude-company)
+claude-proxy profile rename work company
+
+# Rename proxy (migrates Keychain, updates all linked profiles)
+claude-proxy proxy rename corp-lt corp-main
+```
+
+### Delete a proxy safely
+
+```bash
+claude-proxy proxy delete corp-lt
+# ⚠️  Proxy 'corp-lt' is used by profile(s): work
+# ⚠️  Those profiles will be unlinked and run without a proxy.
+# Delete anyway? [y/N] y
+#    Unlinked proxy from profile 'work'
+#    Keychain entry removed
+# ✅ Proxy 'corp-lt' deleted
+```
+
+### Check proxy health
+
+```bash
+claude-proxy proxy check corp-lt
+#   TCP connect to 10.0.0.1:3128 ...          ✅ OK
+#   Proxy authentication ...                   ✅ OK (HTTP 200)
+#   Anthropic API via CONNECT tunnel ...      ✅ OK (HTTP 401)
+#   ✅ Proxy 'corp-lt' looks good.
+```
+
+### Default profile with a proxy
+
+```bash
+# The default profile can also use a proxy
+claude-proxy profile set-proxy default corp-lt
+# Now proxied-claude (without switching profiles) routes through corp-lt
+```
+
+---
+
+## IDE integration
+
+### JetBrains (WebStorm, IntelliJ, etc.)
+
+1. **Settings → Plugins → Marketplace** → search **Claude Code [Beta]** → Install → Restart
+2. **Settings → Tools → Claude Code [Beta]** → Claude command:
+   ```
+   /usr/local/bin/proxied-claude
+   ```
+
+The wrapper always uses the currently active profile. Switch with `claude-proxy use <n>` — takes effect on the next IDE session.
+
+### VS Code
+
+Add to your `settings.json`:
+```json
+{
+  "claude.claudePath": "/usr/local/bin/proxied-claude"
+}
+```
+
+---
+
+## What gets copied with `copy-settings`
+
+| Item | Type | Copied | Notes |
+|------|------|--------|-------|
+| `settings.json` | file | ✅ Yes | UI preferences, themes, MCP servers |
+| `CLAUDE.md` | file | ✅ Yes | Global Claude instructions |
+| `keybindings.json` | file | ✅ Yes | Custom keybindings |
+| `policy-limits.json` | file | ✅ Yes | Usage policy overrides |
+| `hooks/` | dir | ✅ Yes | Custom lifecycle hooks |
+| `plugins/` | dir | ✅ Yes | Installed plugins |
+| `sessions/` | dir | ❌ No | Auth sessions — account-specific |
+| `history.jsonl` | file | ❌ No | Chat history — stays in source profile |
+| `cache/` | dir | ❌ No | Runtime cache |
+| `backups/` | dir | ❌ No | Internal backups |
+| `projects/` | dir | ❌ No | Project data — account-specific |
+| `telemetry/` | dir | ❌ No | Telemetry data |
+
+If a file already exists in the destination profile, a warning is shown before overwriting.
+
+---
+
+## Security notes
+
+- Proxy **passwords are stored only in macOS Keychain** — never in `.conf` files.
+- Config files are parsed with `grep` — **never sourced as bash**. Values like `$(cmd)` are treated as literal strings.
+- `HTTPS_PROXY` (with password) is visible in `ps auxe` **while Claude is running** — acceptable on a personal Mac; be aware on shared machines.
+- Profile and proxy **names are validated** — only `[a-zA-Z0-9_-]` allowed, preventing path traversal.
+- The `update` command downloads from the `main` branch over HTTPS (`--proto '=https' --tlsv1.2`).
+- Mutating commands use a **concurrency lock** to prevent race conditions.
+- Commands requiring input (passwords, confirmations) **fail fast** when stdin is not a terminal.
 
 ---
 
 ## Limitations
 
-- macOS only (Keychain dependency)
-- HTTP CONNECT proxies only — SOCKS is not supported by Claude CLI
-- `CLAUDE_BIN` path is fixed at install time — if Claude is reinstalled to a different path, update it in `/usr/local/bin/proxied-claude`
-- Proxy password is visible in `ps aux` via `HTTPS_PROXY` while Claude is running — acceptable on a personal Mac, but be aware on shared machines
-- Proxy password is also briefly visible in `ps aux` during `claude-proxy check` (passed to `curl` via `--proxy`) — same caveat applies
+- **macOS only** — relies on the `security` CLI for Keychain access
+- **HTTP CONNECT proxies only** — SOCKS proxies are not supported by Claude Code
+- `CLAUDE_BIN` path is fixed at install time — re-run `install.sh` if Claude is reinstalled to a different location
 
 ---
 

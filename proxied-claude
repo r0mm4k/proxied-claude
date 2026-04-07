@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ─── proxied-claude ───────────────────────────────────────────────────────────
+# Runs Claude Code with the active profile's account dir and proxy settings.
+# Managed via: claude-proxy profile / claude-proxy proxy
+#
+# Install path : /usr/local/bin/proxied-claude
+# Config dir   : ~/.config/proxied-claude/
+# ─────────────────────────────────────────────────────────────────────────────
+
+CLAUDE_BIN="__CLAUDE_BIN__"
+CONF_DIR="$HOME/.config/proxied-claude"
+PROFILES_DIR="$CONF_DIR/profiles"
+PROXIES_DIR="$CONF_DIR/proxies"
+ACTIVE_FILE="$CONF_DIR/active_profile"
+
+die() { echo "ERROR: $*" >&2; exit 1; }
+
+# ── Validate state ───────────────────────────────────────────────────────────
+
+[[ "$CLAUDE_BIN" != "__CLAUDE_BIN__" ]] || die "Not installed properly.
+  Run: bash <(curl -fsSL https://raw.githubusercontent.com/r0mm4k/proxied-claude/main/install.sh)"
+
+[[ -x "$CLAUDE_BIN" ]] || die "Claude binary not found: $CLAUDE_BIN
+  Re-run the installer or reinstall Claude Code."
+
+[[ -d "$CONF_DIR" ]] || die "Config not found: $CONF_DIR
+  Run: bash <(curl -fsSL https://raw.githubusercontent.com/r0mm4k/proxied-claude/main/install.sh)"
+
+# Fail fast if v1 config was never migrated
+[[ ! -f "$CONF_DIR/proxy.conf" ]] || die "Found unmigrated v1 config (proxy.conf).
+  Run: claude-proxy migrate"
+
+# ── Fast conf reader (grep, no fork) ─────────────────────────────────────────
+# Reads KEY="value" from a conf file. No subshell, no source, no fork.
+read_conf() {
+  local file="$1" var="$2"
+  local line
+  line="$(grep -m1 "^${var}=" "$file" 2>/dev/null)" || true
+  # Strip: VAR="value" → value  or  VAR=value → value
+  line="${line#*=}"
+  line="${line#\"}"
+  line="${line%\"}"
+  printf '%s' "$line"
+}
+
+# ── Resolve active profile ───────────────────────────────────────────────────
+
+if [[ -f "$ACTIVE_FILE" && -s "$ACTIVE_FILE" ]]; then
+  PROFILE="$(tr -d '[:space:]' < "$ACTIVE_FILE")"
+fi
+PROFILE="${PROFILE:-default}"
+
+PROFILE_CONF="$PROFILES_DIR/${PROFILE}.conf"
+[[ -f "$PROFILE_CONF" ]] || die "Profile '$PROFILE' not found.
+  Run: claude-proxy profile list"
+
+# ── Read profile ─────────────────────────────────────────────────────────────
+
+CLAUDE_DIR="$(read_conf "$PROFILE_CONF" PROFILE_CLAUDE_DIR)"
+LINKED_PROXY="$(read_conf "$PROFILE_CONF" PROFILE_PROXY)"
+
+# Resolve Claude dir with fallback
+if [[ -z "$CLAUDE_DIR" ]]; then
+  [[ "$PROFILE" == "default" ]] && CLAUDE_DIR="$HOME/.claude" || CLAUDE_DIR="$HOME/.claude-${PROFILE}"
+fi
+
+mkdir -p "$CLAUDE_DIR"
+export CLAUDE_CONFIG_DIR="$CLAUDE_DIR"
+
+# ── Apply proxy if linked ────────────────────────────────────────────────────
+
+if [[ -n "$LINKED_PROXY" ]]; then
+  PROXY_CONF="$PROXIES_DIR/${LINKED_PROXY}.conf"
+  [[ -f "$PROXY_CONF" ]] || die "Proxy '$LINKED_PROXY' (profile '$PROFILE') not found.
+  Fix: claude-proxy profile unset-proxy $PROFILE
+  Or:  claude-proxy proxy create $LINKED_PROXY <host:port> <user>"
+
+  PROXY_HOST="$(read_conf "$PROXY_CONF" PROXY_HOST)"
+  PROXY_USER="$(read_conf "$PROXY_CONF" PROXY_USER)"
+  KEYCHAIN_SVC="$(read_conf "$PROXY_CONF" PROXY_KEYCHAIN_SERVICE)"
+
+  [[ -n "$PROXY_HOST" ]] || die "Proxy '$LINKED_PROXY' missing PROXY_HOST."
+  [[ -n "$PROXY_USER" ]] || die "Proxy '$LINKED_PROXY' missing PROXY_USER."
+
+  KEYCHAIN_SVC="${KEYCHAIN_SVC:-claude-proxy:${LINKED_PROXY}}"
+  PASS="$(security find-generic-password -a "$PROXY_USER" -s "$KEYCHAIN_SVC" -w 2>/dev/null || true)"
+  [[ -n "$PASS" ]] || die "Password for proxy '$LINKED_PROXY' not in Keychain.
+  Fix: claude-proxy proxy set-password $LINKED_PROXY"
+
+  PROXY_URL="http://${PROXY_USER}:${PASS}@${PROXY_HOST}"
+  export HTTPS_PROXY="$PROXY_URL"
+  export HTTP_PROXY="$PROXY_URL"
+  export NO_PROXY="localhost,127.0.0.1,::1,::ffff:127.0.0.1"
+  export no_proxy="$NO_PROXY"
+fi
+
+exec "$CLAUDE_BIN" "$@"

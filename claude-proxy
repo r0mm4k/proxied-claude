@@ -1,0 +1,1073 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ─── claude-proxy ─────────────────────────────────────────────────────────────
+# Manages Claude Code profiles (accounts) and proxies.
+#
+# Profile commands:
+#   claude-proxy profile list
+#   claude-proxy profile create <n> [--from <source>]
+#   claude-proxy profile delete <n>
+#   claude-proxy profile rename  <old> <new>
+#   claude-proxy profile use     <n>
+#   claude-proxy profile show    [<n>]
+#   claude-proxy profile set-proxy     <profile> <proxy>
+#   claude-proxy profile unset-proxy   <profile>
+#   claude-proxy profile copy-settings <profile> --from <source>
+#
+# Proxy commands:
+#   claude-proxy proxy list
+#   claude-proxy proxy create <n> <host:port> <user>
+#   claude-proxy proxy delete <n>
+#   claude-proxy proxy rename  <old> <new>
+#   claude-proxy proxy set-password <n>
+#   claude-proxy proxy show  <n>
+#   claude-proxy proxy check <n>
+#
+# Shortcuts:
+#   claude-proxy use <n>      → profile use
+#   claude-proxy status          → full overview
+#   claude-proxy check           → proxy check (active profile's proxy)
+#   claude-proxy version / --version / -v
+#   claude-proxy help / --help / -h
+#   claude-proxy migrate         → migrate from v1 proxy.conf
+#   claude-proxy update          → update to latest from GitHub
+#   claude-proxy uninstall       → remove everything
+# ─────────────────────────────────────────────────────────────────────────────
+
+VERSION="2.0.0"
+
+CONF_DIR="$HOME/.config/proxied-claude"
+PROFILES_DIR="$CONF_DIR/profiles"
+PROXIES_DIR="$CONF_DIR/proxies"
+ACTIVE_FILE="$CONF_DIR/active_profile"
+LOCK_DIR="$CONF_DIR/.lock"
+LEGACY_CONF="$CONF_DIR/proxy.conf"
+
+WRAPPER_PATH="/usr/local/bin/proxied-claude"
+CTL_PATH="/usr/local/bin/claude-proxy"
+
+# Files safe to copy between profiles (no auth, no history, no cache)
+SETTINGS_FILES=(
+  "settings.json"      # UI preferences, themes, MCP servers
+  "CLAUDE.md"          # global Claude instructions
+  "keybindings.json"   # custom keybindings
+  "policy-limits.json" # usage policy overrides
+)
+
+# Directories safe to copy (shallow)
+SETTINGS_DIRS=(
+  "hooks"    # custom lifecycle hooks
+  "plugins"  # installed plugins
+)
+
+# ── Output helpers ───────────────────────────────────────────────────────────
+
+die()  { echo "ERROR: $*" >&2; exit 1; }
+ok()   { echo "✅ $*"; }
+info() { echo "   $*"; }
+warn() { echo "⚠️  $*"; }
+
+# ── Core helpers ─────────────────────────────────────────────────────────────
+
+ensure_dirs() { mkdir -p "$PROFILES_DIR" "$PROXIES_DIR"; }
+
+# Fast conf reader — grep-based, no fork, no source, no injection risk.
+# Reads KEY="value" or KEY=value from a conf file.
+read_conf() {
+  local file="$1" var="$2" line
+  line="$(grep -m1 "^${var}=" "$file" 2>/dev/null)" || true
+  line="${line#*=}"
+  line="${line#\"}"
+  line="${line%\"}"
+  printf '%s' "$line"
+}
+
+# Only allow safe characters — prevents path traversal
+validate_name() {
+  local name="$1" kind="${2:-name}"
+  [[ -n "$name" ]] || die "$kind cannot be empty."
+  [[ "$name" =~ ^[a-zA-Z0-9_-]+$ ]] || \
+    die "Invalid $kind '$name'. Only letters, digits, hyphens and underscores allowed."
+}
+
+active_profile() {
+  if [[ -f "$ACTIVE_FILE" && -s "$ACTIVE_FILE" ]]; then
+    local val; val="$(tr -d '[:space:]' < "$ACTIVE_FILE")"
+    [[ -n "$val" ]] && echo "$val" || echo "default"
+  else
+    echo "default"
+  fi
+}
+
+# Atomic write — prevents partial reads
+write_active() {
+  local tmp; tmp="$(mktemp "${ACTIVE_FILE}.XXXXXX")"
+  echo "$1" > "$tmp"
+  mv "$tmp" "$ACTIVE_FILE"
+}
+
+require_profile() {
+  [[ -f "$PROFILES_DIR/${1}.conf" ]] || \
+    die "Profile '$1' does not exist. Run: claude-proxy profile list"
+}
+
+require_proxy() {
+  [[ -f "$PROXIES_DIR/${1}.conf" ]] || \
+    die "Proxy '$1' does not exist. Run: claude-proxy proxy list"
+}
+
+require_interactive() {
+  [[ -t 0 ]] || die "This command requires interactive input (stdin must be a terminal)."
+}
+
+keychain_service() { echo "claude-proxy:${1}"; }
+
+# Resolve Claude dir for a profile (handles default special case)
+profile_claude_dir() {
+  local name="$1"
+  local dir; dir="$(read_conf "$PROFILES_DIR/${name}.conf" PROFILE_CLAUDE_DIR)"
+  if [[ -z "$dir" ]]; then
+    [[ "$name" == "default" ]] && echo "$HOME/.claude" || echo "$HOME/.claude-${name}"
+  else
+    echo "$dir"
+  fi
+}
+
+# ── Lock (mkdir-based, POSIX-portable) ───────────────────────────────────────
+# Used only for mutating commands. Read-only commands skip locking.
+
+lock_acquire() {
+  local waited=0
+  while ! mkdir "$LOCK_DIR" 2>/dev/null; do
+    (( waited++ >= 5 )) && die "Another claude-proxy instance is running. Retry in a moment.
+  If stuck, remove: $LOCK_DIR"
+    sleep 1
+  done
+  trap 'rm -rf "$LOCK_DIR"' EXIT
+}
+
+lock_release() {
+  rm -rf "$LOCK_DIR"
+  # Reset trap — don't double-delete on exit
+  trap - EXIT
+}
+
+# ── Copy settings ────────────────────────────────────────────────────────────
+
+do_copy_settings() {
+  local src_dir="$1" dst_dir="$2" src_label="$3" dst_label="$4"
+  local copied=0
+  mkdir -p "$dst_dir"
+
+  for f in "${SETTINGS_FILES[@]}"; do
+    if [[ -f "$src_dir/$f" ]]; then
+      [[ -f "$dst_dir/$f" ]] && warn "$f already exists in '$dst_label' — overwriting"
+      cp "$src_dir/$f" "$dst_dir/$f"
+      info "Copied $f"
+      (( copied++ )) || true
+    fi
+  done
+
+  for d in "${SETTINGS_DIRS[@]}"; do
+    if [[ -d "$src_dir/$d" ]]; then
+      mkdir -p "$dst_dir/$d"
+      local dir_copied=0
+      for item in "$src_dir/$d"/*; do
+        [[ -e "$item" ]] || continue
+        local dest_item="$dst_dir/$d/$(basename "$item")"
+        [[ -e "$dest_item" ]] && warn "$d/$(basename "$item") already exists in '$dst_label' — overwriting"
+        cp -r "$item" "$dest_item"
+        (( dir_copied++ )) || true
+      done
+      if [[ $dir_copied -gt 0 ]]; then
+        info "Copied $d/ ($dir_copied item(s))"
+        (( copied++ )) || true
+      fi
+    fi
+  done
+
+  if [[ $copied -eq 0 ]]; then
+    info "No settings found in '$src_label' (nothing copied)"
+  else
+    ok "Settings copied from '$src_label' → '$dst_label'"
+    info "Note: you still need to log in to Claude in the new profile"
+  fi
+}
+
+# ── Find profiles linked to a proxy ─────────────────────────────────────────
+
+# Outputs space-separated list of profile names linked to the given proxy.
+profiles_using_proxy() {
+  local proxy_name="$1" result=""
+  shopt -s nullglob
+  for pf in "$PROFILES_DIR"/*.conf; do
+    local linked; linked="$(read_conf "$pf" PROFILE_PROXY)"
+    [[ "$linked" == "$proxy_name" ]] && result="${result}$(basename "$pf" .conf) "
+  done
+  shopt -u nullglob
+  printf '%s' "$result"
+}
+
+# Unlink proxy from all profiles that reference it.
+unlink_proxy_from_profiles() {
+  local proxy_name="$1"
+  shopt -s nullglob
+  for pf in "$PROFILES_DIR"/*.conf; do
+    local linked; linked="$(read_conf "$pf" PROFILE_PROXY)"
+    if [[ "$linked" == "$proxy_name" ]]; then
+      local pdir; pdir="$(read_conf "$pf" PROFILE_CLAUDE_DIR)"
+      cat > "$pf" <<EOF
+CONFIG_VERSION=1
+PROFILE_CLAUDE_DIR="${pdir}"
+PROFILE_PROXY=""
+EOF
+      info "Unlinked proxy from profile '$(basename "$pf" .conf)'"
+    fi
+  done
+  shopt -u nullglob
+}
+
+# ── Migration (single source of truth) ───────────────────────────────────────
+
+do_migrate() {
+  local verbose="${1:-1}"
+
+  if [[ ! -f "$LEGACY_CONF" ]]; then
+    [[ "$verbose" == "1" ]] && info "No v1 config found (proxy.conf). Nothing to migrate." || true
+    return 0
+  fi
+  if [[ -f "$LEGACY_CONF.migrated" ]]; then
+    [[ "$verbose" == "1" ]] && info "Already migrated (proxy.conf.migrated exists)." || true
+    return 0
+  fi
+
+  echo "Migrating v1 config (proxy.conf) → v2 profiles/proxies..."
+  echo ""
+
+  local old_host old_user old_svc
+  old_host="$(read_conf "$LEGACY_CONF" CLAUDE_PROXY_HOST)"
+  old_user="$(read_conf "$LEGACY_CONF" CLAUDE_PROXY_USER)"
+  old_svc="$(read_conf  "$LEGACY_CONF" CLAUDE_PROXY_KEYCHAIN_SERVICE)"
+  old_svc="${old_svc:-claude-proxy}"
+
+  ensure_dirs
+
+  local has_proxy=false
+  if [[ -n "$old_host" && -n "$old_user" ]]; then
+    has_proxy=true
+    local new_svc; new_svc="$(keychain_service "default")"
+
+    local pass
+    pass="$(security find-generic-password -a "$old_user" -s "$old_svc" -w 2>/dev/null || true)"
+    if [[ -n "$pass" ]]; then
+      security add-generic-password -a "$old_user" -s "$new_svc" -w "$pass" -U 2>/dev/null || true
+      security delete-generic-password -a "$old_user" -s "$old_svc" 2>/dev/null || true
+      ok "Proxy password migrated → Keychain: $new_svc"
+      ok "Old Keychain entry '$old_svc' removed"
+    else
+      warn "Could not read password from Keychain (service=$old_svc, account=$old_user)"
+      info "After migration, run: claude-proxy proxy set-password default"
+    fi
+
+    if [[ ! -f "$PROXIES_DIR/default.conf" ]]; then
+      cat > "$PROXIES_DIR/default.conf" <<EOF
+CONFIG_VERSION=1
+PROXY_HOST="${old_host}"
+PROXY_USER="${old_user}"
+PROXY_KEYCHAIN_SERVICE="${new_svc}"
+EOF
+      ok "Created proxies/default.conf ($old_user@$old_host)"
+    else
+      info "proxies/default.conf already exists — skipped"
+    fi
+  fi
+
+  if [[ ! -f "$PROFILES_DIR/default.conf" ]]; then
+    local linked=""
+    [[ "$has_proxy" == "true" ]] && linked="default"
+    cat > "$PROFILES_DIR/default.conf" <<EOF
+CONFIG_VERSION=1
+PROFILE_CLAUDE_DIR="$HOME/.claude"
+PROFILE_PROXY="${linked}"
+EOF
+    ok "Created profiles/default.conf → $HOME/.claude"
+    [[ "$has_proxy" == "true" ]] && info "Proxy 'default' linked"
+  else
+    info "profiles/default.conf already exists — skipped"
+  fi
+
+  if [[ ! -f "$ACTIVE_FILE" || ! -s "$ACTIVE_FILE" ]]; then
+    write_active "default"
+    ok "Active profile set to 'default'"
+  fi
+
+  mv "$LEGACY_CONF" "$LEGACY_CONF.migrated"
+  ok "Old config saved as proxy.conf.migrated (safe to delete)"
+  echo ""
+  ok "Migration complete!"
+}
+
+# ── Ensure default profile ───────────────────────────────────────────────────
+
+ensure_default_profile() {
+  ensure_dirs
+  if [[ ! -f "$PROFILES_DIR/default.conf" ]]; then
+    cat > "$PROFILES_DIR/default.conf" <<EOF
+CONFIG_VERSION=1
+PROFILE_CLAUDE_DIR="$HOME/.claude"
+PROFILE_PROXY=""
+EOF
+  fi
+  if [[ ! -f "$ACTIVE_FILE" || ! -s "$ACTIVE_FILE" ]]; then
+    write_active "default"
+  fi
+}
+
+# ── Help text (single source) ────────────────────────────────────────────────
+
+print_help() {
+  cat <<EOF
+
+claude-proxy $VERSION — manage Claude Code profiles and proxies
+
+Profile commands:
+  claude-proxy profile list
+  claude-proxy profile create <n> [--from <source>]
+  claude-proxy profile delete <n>
+  claude-proxy profile rename  <old> <new>
+  claude-proxy profile use     <n>
+  claude-proxy profile show    [<n>]
+  claude-proxy profile set-proxy     <profile> <proxy>
+  claude-proxy profile unset-proxy   <profile>
+  claude-proxy profile copy-settings <profile> --from <source>
+
+Proxy commands:
+  claude-proxy proxy list
+  claude-proxy proxy create <n> <host:port> <user>
+  claude-proxy proxy delete <n>
+  claude-proxy proxy rename  <old> <new>
+  claude-proxy proxy set-password <n>
+  claude-proxy proxy show  <n>
+  claude-proxy proxy check <n>
+
+Shortcuts:
+  claude-proxy use <n>     → profile use
+  claude-proxy status         → full overview (active profile + all lists)
+  claude-proxy check          → proxy check (active profile's proxy)
+  claude-proxy version        → print version
+  claude-proxy help           → show this help
+  claude-proxy migrate        → migrate from v1 proxy.conf
+  claude-proxy update         → update to latest from GitHub
+  claude-proxy uninstall      → remove everything
+
+EOF
+}
+
+# ── profile subcommands ──────────────────────────────────────────────────────
+
+cmd_profile() {
+  local sub="${1:-}"; shift || true
+
+  case "$sub" in
+
+    list)
+      local active; active="$(active_profile)"
+      shopt -s nullglob
+      local files=("$PROFILES_DIR"/*.conf)
+      shopt -u nullglob
+      if [[ ${#files[@]} -eq 0 ]]; then
+        echo "  (no profiles yet — run: claude-proxy profile create <n>)"
+        return
+      fi
+      echo ""
+      printf "  %-20s  %-18s  %-30s  %s\n" "PROFILE" "PROXY" "DIR" ""
+      printf "  %-20s  %-18s  %-30s\n" "-------" "-----" "---"
+      for f in "${files[@]}"; do
+        local name; name="$(basename "$f" .conf)"
+        local proxy;     proxy="$(read_conf "$f" PROFILE_PROXY)"
+        local claude_dir; claude_dir="$(profile_claude_dir "$name")"
+        local marker=""; [[ "$name" == "$active" ]] && marker="◀ active"
+        printf "  %-20s  %-18s  %-30s  %s\n" \
+          "$name" "${proxy:-(no proxy)}" "$claude_dir" "$marker"
+      done
+      echo ""
+      ;;
+
+    create)
+      # Parse args (no lock needed yet)
+      local name="${1:-}"; shift || true
+      [[ -n "$name" ]] || die "Usage: claude-proxy profile create <n> [--from <source>]"
+      validate_name "$name" "profile name"
+      local copy_from=""
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          --from) shift; copy_from="${1:-}"; shift ;;
+          *) die "Unknown option: $1" ;;
+        esac
+      done
+      [[ -n "$copy_from" ]] && validate_name "$copy_from" "source profile name"
+
+      # Lock → create conf + dir → release (short hold)
+      lock_acquire
+      local conf="$PROFILES_DIR/${name}.conf"
+      [[ ! -f "$conf" ]] || die "Profile '$name' already exists."
+
+      local claude_dir="$HOME/.claude-${name}"
+      cat > "$conf" <<EOF
+CONFIG_VERSION=1
+PROFILE_CLAUDE_DIR="${claude_dir}"
+PROFILE_PROXY=""
+EOF
+      mkdir -p "$claude_dir"
+      lock_release
+
+      ok "Profile '$name' created"
+      info "Claude dir : $claude_dir"
+      info "Note: you need to log in to Claude the first time you use this profile"
+
+      # Copy settings (no lock — only writes into the new profile's dir)
+      if [[ -n "$copy_from" ]]; then
+        require_profile "$copy_from"
+        local src_dir; src_dir="$(profile_claude_dir "$copy_from")"
+        do_copy_settings "$src_dir" "$claude_dir" "$copy_from" "$name"
+      elif [[ -t 0 ]]; then
+        shopt -s nullglob
+        local existing=("$PROFILES_DIR"/*.conf)
+        shopt -u nullglob
+        local candidates=()
+        for f in "${existing[@]}"; do
+          local pname; pname="$(basename "$f" .conf)"
+          [[ "$pname" != "$name" ]] && candidates+=("$pname")
+        done
+
+        if [[ ${#candidates[@]} -gt 0 ]]; then
+          echo ""
+          echo "  Available profiles to copy settings from:"
+          for c in "${candidates[@]}"; do printf "    %s\n" "$c"; done
+          echo "    (skip)"
+          echo ""
+          read -r -p "  Copy settings from profile? [profile name or Enter to skip]: " _choice
+          if [[ -n "$_choice" && "$_choice" != "skip" ]]; then
+            if [[ -f "$PROFILES_DIR/${_choice}.conf" ]]; then
+              local src_dir; src_dir="$(profile_claude_dir "$_choice")"
+              do_copy_settings "$src_dir" "$claude_dir" "$_choice" "$name"
+            else
+              warn "Profile '$_choice' not found — skipping copy"
+            fi
+          fi
+        fi
+      fi
+
+      # Auto-activate (lock → write_active → release)
+      if [[ -t 0 ]]; then
+        local active; active="$(active_profile)"
+        if [[ "$active" == "default" ]]; then
+          echo ""
+          read -r -p "  Set '$name' as active profile now? [Y/n] " _activate
+          if [[ ! "${_activate:-}" =~ ^[Nn]$ ]]; then
+            lock_acquire
+            write_active "$name"
+            lock_release
+            ok "Active profile → '$name'"
+          fi
+        fi
+      fi
+      ;;
+
+    delete)
+      lock_acquire
+      local name="${1:-}"
+      [[ -n "$name" ]] || die "Usage: claude-proxy profile delete <n>"
+      validate_name "$name" "profile name"
+      [[ "$name" != "default" ]] || die "Cannot delete the 'default' profile.
+  You can unset its proxy: claude-proxy profile unset-proxy default"
+      require_profile "$name"
+      local active; active="$(active_profile)"
+      [[ "$name" != "$active" ]] || die "Cannot delete the active profile '$name'.
+  Switch first: claude-proxy use <other-profile>"
+      local claude_dir; claude_dir="$(profile_claude_dir "$name")"
+      local proxy; proxy="$(read_conf "$PROFILES_DIR/${name}.conf" PROFILE_PROXY)"
+      rm "$PROFILES_DIR/${name}.conf"
+      ok "Profile '$name' deleted"
+      info "Claude dir kept on disk: $claude_dir"
+      info "To also delete data: rm -rf $claude_dir"
+      [[ -n "$proxy" ]] && info "Proxy '$proxy' was linked — it still exists, not deleted"
+      lock_release
+      ;;
+
+    use)
+      lock_acquire
+      local name="${1:-}"
+      [[ -n "$name" ]] || die "Usage: claude-proxy profile use <n>"
+      validate_name "$name" "profile name"
+      require_profile "$name"
+      write_active "$name"
+      local claude_dir; claude_dir="$(profile_claude_dir "$name")"
+      local proxy; proxy="$(read_conf "$PROFILES_DIR/${name}.conf" PROFILE_PROXY)"
+      ok "Switched to profile '$name'"
+      info "Claude dir : $claude_dir"
+      info "Proxy      : ${proxy:-(no proxy)}"
+      lock_release
+      ;;
+
+    show)
+      local active; active="$(active_profile)"
+      local target="${1:-$active}"
+      if [[ -n "${1:-}" ]]; then
+        validate_name "$target" "profile name"
+        require_profile "$target"
+      fi
+      local claude_dir; claude_dir="$(profile_claude_dir "$target")"
+      local proxy; proxy="$(read_conf "$PROFILES_DIR/${target}.conf" PROFILE_PROXY)"
+      echo ""
+      if [[ "$target" == "$active" ]]; then
+        echo "  Profile        : $target  ◀ active"
+      else
+        echo "  Profile        : $target"
+        echo "  Active profile : $active"
+      fi
+      echo "  Claude dir     : $claude_dir"
+      echo "  Proxy          : ${proxy:-(no proxy)}"
+      if [[ -n "$proxy" ]]; then
+        local pconf="$PROXIES_DIR/${proxy}.conf"
+        if [[ -f "$pconf" ]]; then
+          echo "  Proxy host     : $(read_conf "$pconf" PROXY_HOST)"
+          echo "  Proxy user     : $(read_conf "$pconf" PROXY_USER)"
+        else
+          warn "Proxy '$proxy' config is missing!"
+          info "Fix: claude-proxy profile unset-proxy $target"
+        fi
+      fi
+      echo ""
+      ;;
+
+    set-proxy)
+      lock_acquire
+      local name="${1:-}" proxy="${2:-}"
+      [[ -n "$name" && -n "$proxy" ]] || \
+        die "Usage: claude-proxy profile set-proxy <profile> <proxy>"
+      validate_name "$name"  "profile name"
+      validate_name "$proxy" "proxy name"
+      require_profile "$name"
+      require_proxy   "$proxy"
+      local claude_dir; claude_dir="$(profile_claude_dir "$name")"
+      cat > "$PROFILES_DIR/${name}.conf" <<EOF
+CONFIG_VERSION=1
+PROFILE_CLAUDE_DIR="${claude_dir}"
+PROFILE_PROXY="${proxy}"
+EOF
+      ok "Profile '$name' → proxy '$proxy'"
+      lock_release
+      ;;
+
+    unset-proxy)
+      lock_acquire
+      local name="${1:-}"
+      [[ -n "$name" ]] || die "Usage: claude-proxy profile unset-proxy <profile>"
+      validate_name "$name" "profile name"
+      require_profile "$name"
+      local claude_dir; claude_dir="$(profile_claude_dir "$name")"
+      cat > "$PROFILES_DIR/${name}.conf" <<EOF
+CONFIG_VERSION=1
+PROFILE_CLAUDE_DIR="${claude_dir}"
+PROFILE_PROXY=""
+EOF
+      ok "Proxy removed from profile '$name' — will run without proxy"
+      lock_release
+      ;;
+
+    copy-settings)
+      local name="${1:-}"; shift || true
+      [[ -n "$name" ]] || die "Usage: claude-proxy profile copy-settings <profile> --from <source>"
+      validate_name "$name" "profile name"
+      local from_profile=""
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          --from) shift; from_profile="${1:-}"; shift ;;
+          *) die "Unknown option: $1" ;;
+        esac
+      done
+      [[ -n "$from_profile" ]] || die "Usage: claude-proxy profile copy-settings <profile> --from <source>"
+      validate_name "$from_profile" "source profile name"
+      require_profile "$name"
+      require_profile "$from_profile"
+      local src_dir; src_dir="$(profile_claude_dir "$from_profile")"
+      local dst_dir; dst_dir="$(profile_claude_dir "$name")"
+      do_copy_settings "$src_dir" "$dst_dir" "$from_profile" "$name"
+      ;;
+
+    rename)
+      lock_acquire
+      local old="${1:-}" new="${2:-}"
+      [[ -n "$old" && -n "$new" ]] || die "Usage: claude-proxy profile rename <old> <new>"
+      validate_name "$old" "profile name"
+      validate_name "$new" "profile name"
+      [[ "$old" != "default" ]] || die "Cannot rename the 'default' profile."
+      require_profile "$old"
+      [[ ! -f "$PROFILES_DIR/${new}.conf" ]] || die "Profile '$new' already exists."
+
+      local old_dir; old_dir="$(read_conf "$PROFILES_DIR/${old}.conf" PROFILE_CLAUDE_DIR)"
+      local proxy;   proxy="$(read_conf   "$PROFILES_DIR/${old}.conf" PROFILE_PROXY)"
+      old_dir="${old_dir:-$HOME/.claude-${old}}"
+
+      local new_dir
+      if [[ "$old_dir" == "$HOME/.claude-${old}" ]]; then
+        new_dir="$HOME/.claude-${new}"
+      else
+        new_dir="$old_dir"
+      fi
+
+      if [[ "$old_dir" != "$new_dir" ]]; then
+        if [[ -d "$old_dir" ]]; then
+          [[ ! -e "$new_dir" ]] || \
+            die "Cannot move Claude dir: '$new_dir' already exists. Move it manually first."
+          mv "$old_dir" "$new_dir"
+          info "Claude dir moved: $old_dir → $new_dir"
+        else
+          info "Claude dir '$old_dir' not found — skipping move"
+          info "New dir will be: $new_dir (created on first use)"
+        fi
+      fi
+
+      cat > "$PROFILES_DIR/${new}.conf" <<EOF
+CONFIG_VERSION=1
+PROFILE_CLAUDE_DIR="${new_dir}"
+PROFILE_PROXY="${proxy}"
+EOF
+      rm "$PROFILES_DIR/${old}.conf"
+
+      local active; active="$(active_profile)"
+      if [[ "$active" == "$old" ]]; then
+        write_active "$new"
+        info "Active profile updated → '$new'"
+      fi
+      ok "Profile '$old' renamed → '$new'"
+      lock_release
+      ;;
+
+    *)
+      cat <<'EOF'
+Usage:
+  claude-proxy profile list
+  claude-proxy profile create <n> [--from <source>]
+  claude-proxy profile delete <n>
+  claude-proxy profile rename  <old> <new>
+  claude-proxy profile use     <n>
+  claude-proxy profile show    [<n>]
+  claude-proxy profile set-proxy     <profile> <proxy>
+  claude-proxy profile unset-proxy   <profile>
+  claude-proxy profile copy-settings <profile> --from <source>
+EOF
+      exit 1
+      ;;
+  esac
+}
+
+# ── proxy subcommands ────────────────────────────────────────────────────────
+
+cmd_proxy() {
+  local sub="${1:-}"; shift || true
+
+  case "$sub" in
+
+    list)
+      ensure_dirs
+      shopt -s nullglob
+      local files=("$PROXIES_DIR"/*.conf)
+      shopt -u nullglob
+      if [[ ${#files[@]} -eq 0 ]]; then
+        echo "  (no proxies yet — run: claude-proxy proxy create <n> <host:port> <user>)"
+        return
+      fi
+      echo ""
+      printf "  %-20s  %-30s  %s\n" "PROXY" "HOST" "USED BY PROFILES"
+      printf "  %-20s  %-30s  %s\n" "-----" "----" "----------------"
+      for f in "${files[@]}"; do
+        local pname; pname="$(basename "$f" .conf)"
+        local phost; phost="$(read_conf "$f" PROXY_HOST)"
+        local puser; puser="$(read_conf "$f" PROXY_USER)"
+        local used_by; used_by="$(profiles_using_proxy "$pname")"
+        printf "  %-20s  %-30s  %s\n" \
+          "$pname" "${puser:-?}@${phost:-?}" "${used_by:-(unused)}"
+      done
+      echo ""
+      ;;
+
+    create)
+      lock_acquire
+      require_interactive
+      local name="${1:-}" host="${2:-}" user="${3:-}"
+      [[ -n "$name" && -n "$host" && -n "$user" ]] || \
+        die "Usage: claude-proxy proxy create <n> <host:port> <user>"
+      validate_name "$name" "proxy name"
+      [[ "$host" =~ ^[^:]+:[0-9]+$ ]] || \
+        die "Invalid host format '$host'. Expected hostname:PORT (e.g. 10.0.0.1:3128)"
+      ensure_dirs
+      local conf="$PROXIES_DIR/${name}.conf"
+      [[ ! -f "$conf" ]] || die "Proxy '$name' already exists. View: claude-proxy proxy show $name"
+      local svc; svc="$(keychain_service "$name")"
+      cat > "$conf" <<EOF
+CONFIG_VERSION=1
+PROXY_HOST="${host}"
+PROXY_USER="${user}"
+PROXY_KEYCHAIN_SERVICE="${svc}"
+EOF
+      echo "Creating proxy '$name' ($user@$host)"
+      echo "Enter proxy password (stored in macOS Keychain):"
+      security add-generic-password -a "$user" -s "$svc" -U -w
+      ok "Proxy '$name' created"
+      info "Keychain service : $svc"
+      info "Link to a profile: claude-proxy profile set-proxy <profile> $name"
+      lock_release
+      ;;
+
+    delete)
+      lock_acquire
+      local name="${1:-}"
+      [[ -n "$name" ]] || die "Usage: claude-proxy proxy delete <n>"
+      validate_name "$name" "proxy name"
+      require_proxy "$name"
+
+      local used_by; used_by="$(profiles_using_proxy "$name")"
+      if [[ -n "$used_by" ]]; then
+        warn "Proxy '$name' is used by profile(s): $used_by"
+        warn "Those profiles will be unlinked and run without a proxy."
+        require_interactive
+        read -r -p "Delete anyway? [y/N] " _confirm
+        [[ "${_confirm:-}" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 0; }
+        # Unlink from all profiles before deleting
+        unlink_proxy_from_profiles "$name"
+      fi
+
+      local puser; puser="$(read_conf "$PROXIES_DIR/${name}.conf" PROXY_USER)"
+      local psvc;  psvc="$(read_conf  "$PROXIES_DIR/${name}.conf" PROXY_KEYCHAIN_SERVICE)"
+      psvc="${psvc:-$(keychain_service "$name")}"
+      if security delete-generic-password -a "${puser:-}" -s "$psvc" 2>/dev/null; then
+        info "Keychain entry removed"
+      else
+        info "Keychain entry not found (skipped)"
+      fi
+      rm "$PROXIES_DIR/${name}.conf"
+      ok "Proxy '$name' deleted"
+      lock_release
+      ;;
+
+    set-password)
+      require_interactive
+      local name="${1:-}"
+      [[ -n "$name" ]] || die "Usage: claude-proxy proxy set-password <n>"
+      validate_name "$name" "proxy name"
+      require_proxy "$name"
+      local puser; puser="$(read_conf "$PROXIES_DIR/${name}.conf" PROXY_USER)"
+      local psvc;  psvc="$(read_conf  "$PROXIES_DIR/${name}.conf" PROXY_KEYCHAIN_SERVICE)"
+      psvc="${psvc:-$(keychain_service "$name")}"
+      echo "Enter new password for proxy '$name' (user: ${puser:-?}):"
+      security add-generic-password -a "$puser" -s "$psvc" -U -w
+      ok "Password updated in Keychain"
+      ;;
+
+    show)
+      local name="${1:-}"
+      [[ -n "$name" ]] || die "Usage: claude-proxy proxy show <n>"
+      validate_name "$name" "proxy name"
+      require_proxy "$name"
+      local phost; phost="$(read_conf "$PROXIES_DIR/${name}.conf" PROXY_HOST)"
+      local puser; puser="$(read_conf "$PROXIES_DIR/${name}.conf" PROXY_USER)"
+      local psvc;  psvc="$(read_conf  "$PROXIES_DIR/${name}.conf" PROXY_KEYCHAIN_SERVICE)"
+      psvc="${psvc:-$(keychain_service "$name")}"
+      local has_pass="no"
+      security find-generic-password -a "$puser" -s "$psvc" -w &>/dev/null && has_pass="yes"
+      echo ""
+      echo "  Proxy            : $name"
+      echo "  Host             : ${phost:-?}"
+      echo "  User             : ${puser:-?}"
+      echo "  Keychain service : $psvc"
+      echo "  Password in KC   : $has_pass"
+      echo ""
+      ;;
+
+    check)
+      local name="${1:-}"
+      [[ -n "$name" ]] || die "Usage: claude-proxy proxy check <n>"
+      validate_name "$name" "proxy name"
+      require_proxy "$name"
+      local phost; phost="$(read_conf "$PROXIES_DIR/${name}.conf" PROXY_HOST)"
+      local puser; puser="$(read_conf "$PROXIES_DIR/${name}.conf" PROXY_USER)"
+      local psvc;  psvc="$(read_conf  "$PROXIES_DIR/${name}.conf" PROXY_KEYCHAIN_SERVICE)"
+      psvc="${psvc:-$(keychain_service "$name")}"
+      local pass
+      pass="$(security find-generic-password -a "$puser" -s "$psvc" -w 2>/dev/null || true)"
+      [[ -n "$pass" ]] || die "Password not found in Keychain for proxy '$name'.
+  Fix: claude-proxy proxy set-password $name"
+
+      local proxy_ip="${phost%%:*}"
+      local proxy_port="${phost##*:}"
+      [[ "$proxy_port" =~ ^[0-9]+$ ]] || die "Invalid proxy host '$phost'. Expected hostname:PORT"
+
+      echo ""
+      echo "Checking proxy '$name' ($puser@$phost)..."
+      echo ""
+
+      # 1. TCP
+      printf "  %-44s" "TCP connect to $proxy_ip:$proxy_port ..."
+      if nc -z -w 5 "$proxy_ip" "$proxy_port" 2>/dev/null; then
+        echo "✅ OK"
+      else
+        echo "❌ FAILED (host unreachable or port closed)"; exit 1
+      fi
+
+      local proxy_url="http://${puser}:${pass}@${phost}"
+
+      # 2. Proxy auth
+      printf "  %-44s" "Proxy authentication ..."
+      local auth_code
+      auth_code="$(curl -s -o /dev/null -w "%{http_code}" \
+        --max-time 10 --proxy "$proxy_url" \
+        "http://api.anthropic.com" 2>/dev/null || echo "000")"
+      case "$auth_code" in
+        407) echo "❌ FAILED — proxy rejected credentials (HTTP 407)"
+             info "Fix: claude-proxy proxy set-password $name"; exit 1 ;;
+        000) echo "⚠️  No response (may still work for CONNECT tunnels)" ;;
+        *)   echo "✅ OK (HTTP $auth_code)" ;;
+      esac
+
+      # 3. Anthropic API via CONNECT tunnel
+      printf "  %-44s" "Anthropic API via CONNECT tunnel ..."
+      local api_code
+      api_code="$(curl -s -o /dev/null -w "%{http_code}" \
+        --max-time 15 --proxy "$proxy_url" --proxytunnel \
+        "https://api.anthropic.com/v1/models" \
+        -H "x-api-key: invalid-check" \
+        -H "anthropic-version: 2023-06-01" 2>/dev/null || echo "000")"
+      case "$api_code" in
+        200|401|403) echo "✅ OK (HTTP $api_code — API reachable)" ;;
+        407) echo "❌ FAILED — proxy auth rejected (HTTP 407)"
+             info "Fix: claude-proxy proxy set-password $name"; exit 1 ;;
+        000) echo "❌ FAILED — timeout or no response"; exit 1 ;;
+        *)   echo "⚠️  HTTP $api_code — unexpected, but tunnel may work" ;;
+      esac
+
+      echo ""
+      ok "Proxy '$name' looks good."
+      echo ""
+      ;;
+
+    rename)
+      lock_acquire
+      local old="${1:-}" new="${2:-}"
+      [[ -n "$old" && -n "$new" ]] || die "Usage: claude-proxy proxy rename <old> <new>"
+      validate_name "$old" "proxy name"
+      validate_name "$new" "proxy name"
+      require_proxy "$old"
+      [[ ! -f "$PROXIES_DIR/${new}.conf" ]] || die "Proxy '$new' already exists."
+      local phost; phost="$(read_conf "$PROXIES_DIR/${old}.conf" PROXY_HOST)"
+      local puser; puser="$(read_conf "$PROXIES_DIR/${old}.conf" PROXY_USER)"
+      local old_svc; old_svc="$(read_conf "$PROXIES_DIR/${old}.conf" PROXY_KEYCHAIN_SERVICE)"
+      old_svc="${old_svc:-$(keychain_service "$old")}"
+      local new_svc; new_svc="$(keychain_service "$new")"
+
+      # Migrate Keychain entry
+      local pass
+      pass="$(security find-generic-password -a "$puser" -s "$old_svc" -w 2>/dev/null || true)"
+      if [[ -n "$pass" ]]; then
+        security add-generic-password -a "$puser" -s "$new_svc" -w "$pass" -U 2>/dev/null || true
+        security delete-generic-password -a "$puser" -s "$old_svc" 2>/dev/null || true
+        info "Keychain entry renamed: $old_svc → $new_svc"
+      else
+        warn "Could not migrate Keychain entry — run: claude-proxy proxy set-password $new"
+      fi
+
+      cat > "$PROXIES_DIR/${new}.conf" <<EOF
+CONFIG_VERSION=1
+PROXY_HOST="${phost}"
+PROXY_USER="${puser}"
+PROXY_KEYCHAIN_SERVICE="${new_svc}"
+EOF
+      rm "$PROXIES_DIR/${old}.conf"
+
+      # Update linked profiles
+      shopt -s nullglob
+      for pf in "$PROFILES_DIR"/*.conf; do
+        local linked; linked="$(read_conf "$pf" PROFILE_PROXY)"
+        if [[ "$linked" == "$old" ]]; then
+          local pdir; pdir="$(read_conf "$pf" PROFILE_CLAUDE_DIR)"
+          cat > "$pf" <<EOF
+CONFIG_VERSION=1
+PROFILE_CLAUDE_DIR="${pdir}"
+PROFILE_PROXY="${new}"
+EOF
+          info "Updated profile '$(basename "$pf" .conf)' → proxy '$new'"
+        fi
+      done
+      shopt -u nullglob
+      ok "Proxy '$old' renamed → '$new'"
+      lock_release
+      ;;
+
+    *)
+      cat <<'EOF'
+Usage:
+  claude-proxy proxy list
+  claude-proxy proxy create <n> <host:port> <user>
+  claude-proxy proxy delete <n>
+  claude-proxy proxy rename  <old> <new>
+  claude-proxy proxy set-password <n>
+  claude-proxy proxy show  <n>
+  claude-proxy proxy check <n>
+EOF
+      exit 1
+      ;;
+  esac
+}
+
+# ── Top-level dispatch ───────────────────────────────────────────────────────
+
+ensure_default_profile
+
+cmd="${1:-}"; shift || true
+
+case "$cmd" in
+  profile) cmd_profile "$@" ;;
+  proxy)   cmd_proxy   "$@" ;;
+
+  use)
+    [[ -n "${1:-}" ]] || die "Usage: claude-proxy use <profile>"
+    cmd_profile use "$1"
+    ;;
+
+  status)
+    _st_active="$(active_profile)"
+    _st_dir="$(profile_claude_dir "$_st_active")"
+    _st_proxy="$(read_conf "$PROFILES_DIR/${_st_active}.conf" PROFILE_PROXY)"
+    echo ""
+    echo "  ── Active profile ─────────────────────────────"
+    echo "  Profile    : $_st_active"
+    echo "  Claude dir : $_st_dir"
+    echo "  Proxy      : ${_st_proxy:-(no proxy)}"
+    if [[ -n "$_st_proxy" ]]; then
+      _st_pconf="$PROXIES_DIR/${_st_proxy}.conf"
+      if [[ -f "$_st_pconf" ]]; then
+        echo "  Host       : $(read_conf "$_st_pconf" PROXY_HOST)"
+        echo "  User       : $(read_conf "$_st_pconf" PROXY_USER)"
+      else
+        warn "Proxy '$_st_proxy' config is missing!"
+      fi
+    fi
+    echo ""
+    echo "  ── All profiles ───────────────────────────────"
+    shopt -s nullglob
+    _st_pfiles=("$PROFILES_DIR"/*.conf)
+    shopt -u nullglob
+    if [[ ${#_st_pfiles[@]} -eq 0 ]]; then
+      echo "  (none)"
+    else
+      for _st_f in "${_st_pfiles[@]}"; do
+        _st_n="$(basename "$_st_f" .conf)"
+        _st_lp="$(read_conf "$_st_f" PROFILE_PROXY)"
+        _st_marker=""; [[ "$_st_n" == "$_st_active" ]] && _st_marker=" ◀"
+        printf "  %-20s  %s%s\n" "$_st_n" "${_st_lp:-(no proxy)}" "$_st_marker"
+      done
+    fi
+    echo ""
+    echo "  ── All proxies ────────────────────────────────"
+    shopt -s nullglob
+    _st_xfiles=("$PROXIES_DIR"/*.conf)
+    shopt -u nullglob
+    if [[ ${#_st_xfiles[@]} -eq 0 ]]; then
+      echo "  (none)"
+    else
+      for _st_f in "${_st_xfiles[@]}"; do
+        _st_n="$(basename "$_st_f" .conf)"
+        _st_h="$(read_conf "$_st_f" PROXY_HOST)"
+        _st_u="$(read_conf "$_st_f" PROXY_USER)"
+        printf "  %-20s  %s@%s\n" "$_st_n" "${_st_u:-?}" "${_st_h:-?}"
+      done
+    fi
+    echo ""
+    ;;
+
+  check)
+    _active="$(active_profile)"
+    _proxy="$(read_conf "$PROFILES_DIR/${_active}.conf" PROFILE_PROXY)"
+    [[ -n "$_proxy" ]] || die "Active profile '$_active' has no proxy linked.
+  Link one: claude-proxy profile set-proxy $_active <proxy>"
+    cmd_proxy check "$_proxy"
+    ;;
+
+  version|--version|-v)
+    echo "claude-proxy $VERSION"
+    ;;
+
+  help|--help|-h)
+    print_help
+    ;;
+
+  migrate)
+    lock_acquire
+    do_migrate 1
+    lock_release
+    ;;
+
+  update)
+    echo "Updating proxied-claude from GitHub..."
+    echo "Your profiles, proxies and settings are preserved."
+    echo ""
+    _TMP="$(mktemp)"
+    trap 'rm -f "$_TMP"' EXIT
+    curl -fsSL --proto '=https' --tlsv1.2 \
+      "https://raw.githubusercontent.com/r0mm4k/proxied-claude/main/install.sh" \
+      -o "$_TMP"
+    PROXIED_CLAUDE_UPGRADE=1 bash "$_TMP"
+    ;;
+
+  uninstall)
+    echo "This will remove:"
+    echo "  $WRAPPER_PATH"
+    echo "  $CTL_PATH"
+    echo "  $CONF_DIR (all profiles, proxy configs, active_profile)"
+    echo "  All Keychain entries for managed proxies"
+    echo ""
+    echo "Will NOT delete: ~/.claude  ~/.claude-*  (your Claude account data)"
+    echo ""
+    require_interactive
+    read -r -p "Are you sure? [y/N] " _confirm
+    [[ "${_confirm:-}" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 0; }
+
+    shopt -s nullglob
+    for f in "$PROXIES_DIR"/*.conf; do
+      _u="$(read_conf "$f" PROXY_USER)"
+      _s="$(read_conf "$f" PROXY_KEYCHAIN_SERVICE)"
+      _s="${_s:-claude-proxy:$(basename "$f" .conf)}"
+      security delete-generic-password -a "${_u:-}" -s "$_s" 2>/dev/null && \
+        info "Keychain removed: $_s" || true
+    done
+    shopt -u nullglob
+
+    [[ -f "$WRAPPER_PATH" ]] && { sudo rm -f "$WRAPPER_PATH"; ok "Removed $WRAPPER_PATH"; } || true
+    [[ -f "$CTL_PATH" ]]     && { sudo rm -f "$CTL_PATH";     ok "Removed $CTL_PATH";     } || true
+    [[ -d "$CONF_DIR" ]]     && { rm -rf "$CONF_DIR";         ok "Removed $CONF_DIR";     } || true
+    echo ""
+    ok "Uninstalled. Your Claude account dirs (~/.claude*) were kept."
+    ;;
+
+  "")
+    print_help
+    ;;
+
+  *)
+    # Friendly hint for v1 users who still use old commands
+    case "$cmd" in
+      set-all|set-host|set-user)
+        echo "ERROR: '$cmd' was a v1 command. Use instead:" >&2
+        echo "  claude-proxy proxy create <n> <host:port> <user>" >&2
+        exit 1 ;;
+      set-password)
+        echo "ERROR: '$cmd' was a v1 command. Use instead:" >&2
+        echo "  claude-proxy proxy set-password default" >&2
+        exit 1 ;;
+    esac
+    die "Unknown command: $cmd
+  Run: claude-proxy help"
+    ;;
+esac

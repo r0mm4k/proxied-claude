@@ -1,353 +1,181 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ====== Settings you may want to change ======
-CLAUDE_BIN_DEFAULT="/opt/homebrew/bin/claude"
-CONF_DIR="$HOME/.config/proxied-claude"
-CONF_FILE="$CONF_DIR/proxy.conf"
+# ─── proxied-claude installer ─────────────────────────────────────────────────
+# Installs:
+#   /usr/local/bin/proxied-claude   — wrapper (runs Claude with active profile)
+#   /usr/local/bin/claude-proxy     — control utility (profiles + proxies)
+#
+# Config: ~/.config/proxied-claude/
+#   profiles/<n>.conf   proxies/<n>.conf   active_profile
+#
+# Upgrade (preserves all config and migrates v1 automatically):
+#   claude-proxy update
+#   — or —
+#   PROXIED_CLAUDE_UPGRADE=1 bash install.sh
+# ─────────────────────────────────────────────────────────────────────────────
+
+VERSION="2.0.0"
 WRAPPER_PATH="/usr/local/bin/proxied-claude"
 CTL_PATH="/usr/local/bin/claude-proxy"
-KEYCHAIN_SERVICE_DEFAULT="claude-proxy"
-# ============================================
+CONF_DIR="$HOME/.config/proxied-claude"
+REPO_RAW="https://raw.githubusercontent.com/r0mm4k/proxied-claude/main"
+IS_UPGRADE="${PROXIED_CLAUDE_UPGRADE:-0}"
 
 die()  { echo "ERROR: $*" >&2; exit 1; }
-have() { command -v "$1" >/dev/null 2>&1; }
 step() { echo; echo "── $* ──"; }
+ok()   { echo "✅ $*"; }
+info() { echo "   $*"; }
+warn() { echo "⚠️  $*"; }
 
-echo "== Claude Proxy Setup =="
+# Validate name (only safe chars)
+validate_name() {
+  local name="$1"
+  [[ -n "$name" && "$name" =~ ^[a-zA-Z0-9_-]+$ ]]
+}
 
-# ── 1. Ensure claude binary exists ──────────────────────────────────────────
-step "Checking Claude CLI"
-if have claude; then
+if [[ "$IS_UPGRADE" == "1" ]]; then
+  echo "== proxied-claude upgrade v$VERSION =="
+else
+  echo "== proxied-claude installer v$VERSION =="
+fi
+
+# ── 1. Claude binary ────────────────────────────────────────────────────────
+
+step "Claude CLI"
+
+if command -v claude >/dev/null 2>&1; then
   CLAUDE_BIN="$(command -v claude)"
 else
   echo "Claude not found — installing via Homebrew..."
-  have brew || die "Homebrew not found. Install it first: https://brew.sh"
+  command -v brew >/dev/null 2>&1 || die "Homebrew not found. Install: https://brew.sh"
   brew install claude
   CLAUDE_BIN="$(command -v claude)"
 fi
-
-# Prefer the canonical Homebrew path on Apple Silicon
-if [[ -x "$CLAUDE_BIN_DEFAULT" ]]; then
-  CLAUDE_BIN="$CLAUDE_BIN_DEFAULT"
-fi
+# Prefer canonical Homebrew path on Apple Silicon
+[[ -x "/opt/homebrew/bin/claude" ]] && CLAUDE_BIN="/opt/homebrew/bin/claude"
 echo "Claude binary: $CLAUDE_BIN"
 
-# ── 2. Gather proxy settings ─────────────────────────────────────────────────
-step "Proxy configuration"
+# ── 2. Config directories ──────────────────────────────────────────────────
 
-SKIP_PASSWORD=false
+step "Config directories"
+mkdir -p "$CONF_DIR/profiles" "$CONF_DIR/proxies"
+ok "$CONF_DIR"
 
-if [[ -f "$CONF_FILE" ]]; then
-  # shellcheck disable=SC1090
-  source "$CONF_FILE"
-  echo "Existing config found:"
-  echo "  Host: ${CLAUDE_PROXY_HOST}"
-  echo "  User: ${CLAUDE_PROXY_USER}"
-  read -r -p "Keep current settings? [Y/n] " keep
-  if [[ ! "${keep:-}" =~ ^[Nn]$ ]]; then
-    PROXY_HOST="$CLAUDE_PROXY_HOST"
-    PROXY_USER="$CLAUDE_PROXY_USER"
-    KEYCHAIN_SERVICE="${CLAUDE_PROXY_KEYCHAIN_SERVICE:-$KEYCHAIN_SERVICE_DEFAULT}"
-    SKIP_PASSWORD=true
-    echo "OK: keeping current settings"
-  fi
-fi
+# ── 3. Download and install binaries ───────────────────────────────────────
 
-if [[ "$SKIP_PASSWORD" == "false" ]]; then
-  read -r -p "Proxy host (IP:PORT): " PROXY_HOST
-  [[ -n "${PROXY_HOST}" ]] || die "Proxy host is required."
+step "Installing proxied-claude (sudo required)"
 
-  read -r -p "Proxy user: " PROXY_USER
-  [[ -n "${PROXY_USER}" ]] || die "Proxy user is required."
+TMP_WRAPPER="$(mktemp)"
+TMP_CTL="$(mktemp)"
+trap 'rm -f "$TMP_WRAPPER" "$TMP_CTL"' EXIT
 
-  read -r -p "Keychain service name [${KEYCHAIN_SERVICE_DEFAULT}]: " KEYCHAIN_SERVICE
-  KEYCHAIN_SERVICE="${KEYCHAIN_SERVICE:-$KEYCHAIN_SERVICE_DEFAULT}"
-fi
-
-# ── 3. Write config file ─────────────────────────────────────────────────────
-step "Writing config"
-mkdir -p "$CONF_DIR"
-if [[ "$SKIP_PASSWORD" == "false" ]]; then
-  cat > "$CONF_FILE" <<EOF
-CLAUDE_PROXY_HOST="${PROXY_HOST}"
-CLAUDE_PROXY_USER="${PROXY_USER}"
-CLAUDE_PROXY_KEYCHAIN_SERVICE="${KEYCHAIN_SERVICE}"
-EOF
-  echo "Config: $CONF_FILE"
-else
-  echo "Skipping — keeping existing config"
-fi
-
-# ── 4. Create wrapper: proxied-claude ────────────────────────────────────────
-step "Installing wrapper (sudo required)"
-sudo mkdir -p "$(dirname "$WRAPPER_PATH")"
-sudo tee "$WRAPPER_PATH" >/dev/null <<EOF
-#!/bin/bash
-set -euo pipefail
-
-CLAUDE_BIN="${CLAUDE_BIN}"
-CONF="\$HOME/.config/proxied-claude/proxy.conf"
-
-die() { echo "ERROR: \$*" >&2; exit 1; }
-
-[[ -x "\$CLAUDE_BIN" ]] || die "Claude binary not found: \$CLAUDE_BIN"
-[[ -f "\$CONF" ]] || die "Proxy config not found: \$CONF (run: claude-proxy set-all IP:PORT USER)"
-
-# shellcheck disable=SC1090
-source "\$CONF"
-
-: "\${CLAUDE_PROXY_HOST:?Missing CLAUDE_PROXY_HOST}"
-: "\${CLAUDE_PROXY_USER:?Missing CLAUDE_PROXY_USER}"
-: "\${CLAUDE_PROXY_KEYCHAIN_SERVICE:=claude-proxy}"
-
-PASS="\$(security find-generic-password -a "\$CLAUDE_PROXY_USER" -s "\$CLAUDE_PROXY_KEYCHAIN_SERVICE" -w 2>/dev/null || true)"
-[[ -n "\$PASS" ]] || die "Proxy password not found in Keychain (service=\$CLAUDE_PROXY_KEYCHAIN_SERVICE, account=\$CLAUDE_PROXY_USER)"
-
-PROXY="http://\${CLAUDE_PROXY_USER}:\${PASS}@\${CLAUDE_PROXY_HOST}"
-
-export HTTPS_PROXY="\$PROXY"
-export HTTP_PROXY="\$PROXY"
-# Do not proxy localhost — keeps the IDE ↔ Claude bridge working
-export NO_PROXY="localhost,127.0.0.1,::1,::ffff:127.0.0.1"
-export no_proxy="\$NO_PROXY"
-
-exec "\$CLAUDE_BIN" "\$@"
-EOF
+curl -fsSL --proto '=https' --tlsv1.2 "${REPO_RAW}/proxied-claude" -o "$TMP_WRAPPER"
+sed "s@__CLAUDE_BIN__@${CLAUDE_BIN}@g" "$TMP_WRAPPER" > "${TMP_WRAPPER}.patched"
+mv "${TMP_WRAPPER}.patched" "$TMP_WRAPPER"
+sudo cp "$TMP_WRAPPER" "$WRAPPER_PATH"
 sudo chmod +x "$WRAPPER_PATH"
-echo "OK: $WRAPPER_PATH"
+ok "$WRAPPER_PATH"
 
-# ── 5. Create control utility: claude-proxy ──────────────────────────────────
-step "Installing control utility (sudo required)"
-sudo tee "$CTL_PATH" >/dev/null <<'EOF'
-#!/bin/bash
-set -euo pipefail
-
-CONF="$HOME/.config/proxied-claude/proxy.conf"
-DIR="$(dirname "$CONF")"
-
-die() { echo "ERROR: $*" >&2; exit 1; }
-
-ensure_conf() {
-  mkdir -p "$DIR"
-  if [[ ! -f "$CONF" ]]; then
-    cat > "$CONF" <<'EOC'
-CLAUDE_PROXY_HOST=""
-CLAUDE_PROXY_USER=""
-CLAUDE_PROXY_KEYCHAIN_SERVICE="claude-proxy"
-EOC
-  fi
-}
-
-load_conf() {
-  # shellcheck disable=SC1090
-  source "$CONF"
-  : "${CLAUDE_PROXY_KEYCHAIN_SERVICE:=claude-proxy}"
-}
-
-write_conf() {
-  cat > "$CONF" <<EOC
-CLAUDE_PROXY_HOST="${CLAUDE_PROXY_HOST}"
-CLAUDE_PROXY_USER="${CLAUDE_PROXY_USER}"
-CLAUDE_PROXY_KEYCHAIN_SERVICE="${CLAUDE_PROXY_KEYCHAIN_SERVICE}"
-EOC
-}
-
-cmd="${1:-}"
-shift || true
-
-case "$cmd" in
-  status)
-    ensure_conf
-    cat "$CONF"
-    ;;
-
-  set-host)
-    [[ $# -eq 1 ]] || die "Usage: claude-proxy set-host IP:PORT"
-    ensure_conf; load_conf
-    CLAUDE_PROXY_HOST="$1"; write_conf
-    echo "OK: host → $CLAUDE_PROXY_HOST"
-    ;;
-
-  set-user)
-    [[ $# -eq 1 ]] || die "Usage: claude-proxy set-user USER"
-    ensure_conf; load_conf
-    CLAUDE_PROXY_USER="$1"; write_conf
-    echo "OK: user → $CLAUDE_PROXY_USER"
-    ;;
-
-  set-password)
-    ensure_conf; load_conf
-    [[ -n "${CLAUDE_PROXY_USER:-}" ]] || die "Set user first: claude-proxy set-user USER"
-    security add-generic-password -a "$CLAUDE_PROXY_USER" -s "$CLAUDE_PROXY_KEYCHAIN_SERVICE" -U -w
-    echo "OK: password updated in Keychain"
-    ;;
-
-  set-all)
-    [[ $# -eq 2 ]] || die "Usage: claude-proxy set-all IP:PORT USER"
-    ensure_conf; load_conf
-    CLAUDE_PROXY_HOST="$1"; CLAUDE_PROXY_USER="$2"; write_conf
-    security add-generic-password -a "$CLAUDE_PROXY_USER" -s "$CLAUDE_PROXY_KEYCHAIN_SERVICE" -U -w
-    echo "OK: host/user updated, password saved in Keychain"
-    ;;
-
-  check)
-    ensure_conf; load_conf
-
-    [[ -n "${CLAUDE_PROXY_HOST:-}" ]] || die "Proxy host not set (run: claude-proxy set-host IP:PORT)"
-    [[ -n "${CLAUDE_PROXY_USER:-}" ]] || die "Proxy user not set (run: claude-proxy set-user USER)"
-
-    PASS="$(security find-generic-password \
-      -a "$CLAUDE_PROXY_USER" \
-      -s "$CLAUDE_PROXY_KEYCHAIN_SERVICE" \
-      -w 2>/dev/null || true)"
-    [[ -n "$PASS" ]] || die "Proxy password not found in Keychain"
-
-    TARGET="https://api.anthropic.com"
-    PROXY_URL="http://${CLAUDE_PROXY_USER}:${PASS}@${CLAUDE_PROXY_HOST}"
-
-    echo "Checking proxy: ${CLAUDE_PROXY_HOST}"
-    echo "User:           ${CLAUDE_PROXY_USER}"
-    echo "Target:         ${TARGET}"
-    echo
-
-    # ── 1. TCP reachability ────────────────────────────────────────────────
-    PROXY_IP="${CLAUDE_PROXY_HOST%%:*}"
-    PROXY_PORT="${CLAUDE_PROXY_HOST##*:}"
-    [[ "$PROXY_PORT" =~ ^[0-9]+$ ]] || die "Invalid proxy host format, expected IP:PORT (got: $CLAUDE_PROXY_HOST)"
-
-    printf "  %-35s" "TCP connect to proxy..."
-    _tcp_ok=false
-    if command -v nc >/dev/null 2>&1; then
-      nc -z -w 5 "$PROXY_IP" "$PROXY_PORT" 2>/dev/null && _tcp_ok=true || true
-    elif curl -s --max-time 5 -o /dev/null \
-        "http://$PROXY_IP:$PROXY_PORT" 2>/dev/null; then
-      _tcp_ok=true
-    fi
-    if [[ "$_tcp_ok" == "true" ]]; then
-      echo "✅  OK"
-    else
-      echo "❌  FAILED (host unreachable or port closed)"
-      exit 1
-    fi
-
-    # ── 2. Anthropic API reachability ─────────────────────────────────────
-    printf "  %-35s" "Anthropic API reachability..."
-    API_CODE="$(curl -s -o /dev/null -w "%{http_code}" \
-      --max-time 15 \
-      --proxy "$PROXY_URL" \
-      --proxytunnel \
-      "${TARGET}/v1/models" \
-      -H "x-api-key: invalid-check" \
-      -H "anthropic-version: 2023-06-01" 2>/dev/null || true)"
-
-    case "$API_CODE" in
-      200|401|403)
-        echo "✅  OK (HTTP $API_CODE — API is reachable)"
-        ;;
-      000)
-        echo "❌  FAILED — no response / timeout"
-        exit 1
-        ;;
-      *)
-        echo "⚠️   HTTP $API_CODE — unexpected, but proxy tunnel works"
-        ;;
-    esac
-
-    echo
-    echo "✅  Proxy is working correctly."
-    ;;
-
-  uninstall)
-    ensure_conf; load_conf
-    echo "This will remove proxied-claude, claude-proxy, config, and Keychain password."
-    read -r -p "Are you sure? [y/N] " confirm
-    [[ "${confirm:-}" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 0; }
-
-    WRAPPER_PATH="/usr/local/bin/proxied-claude"
-    CTL_PATH="/usr/local/bin/claude-proxy"
-    CONF_DIR="$HOME/.config/proxied-claude"
-
-    if [[ -f "$WRAPPER_PATH" ]]; then
-      sudo rm "$WRAPPER_PATH" && echo "OK: removed $WRAPPER_PATH"
-    else
-      echo "SKIP: $WRAPPER_PATH not found"
-    fi
-
-    if [[ -f "$CTL_PATH" ]]; then
-      sudo rm "$CTL_PATH" && echo "OK: removed $CTL_PATH"
-    else
-      echo "SKIP: $CTL_PATH not found"
-    fi
-
-    KEYCHAIN_USER="${CLAUDE_PROXY_USER:-}"
-    KEYCHAIN_SERVICE="${CLAUDE_PROXY_KEYCHAIN_SERVICE:-claude-proxy}"
-    if [[ -n "$KEYCHAIN_USER" ]]; then
-      if security delete-generic-password \
-          -a "$KEYCHAIN_USER" \
-          -s "$KEYCHAIN_SERVICE" 2>/dev/null; then
-        echo "OK: removed Keychain entry (service=$KEYCHAIN_SERVICE, account=$KEYCHAIN_USER)"
-      else
-        echo "SKIP: Keychain entry not found"
-      fi
-    else
-      echo "SKIP: no user in config, skipping Keychain cleanup"
-    fi
-
-    if [[ -d "$CONF_DIR" ]]; then
-      rm -rf "$CONF_DIR" && echo "OK: removed $CONF_DIR"
-    else
-      echo "SKIP: $CONF_DIR not found"
-    fi
-
-    echo
-    echo "✅  Done! proxied-claude has been uninstalled."
-    ;;
-
-  update)
-    TMP=$(mktemp)
-    trap 'rm -f "$TMP"' EXIT
-    curl -fsSL https://raw.githubusercontent.com/r0mm4k/proxied-claude/main/install.sh -o "$TMP"
-    bash "$TMP"
-    ;;
-
-  *)
-    cat <<EOC
-Usage:
-  claude-proxy status
-  claude-proxy set-host  IP:PORT
-  claude-proxy set-user  USER
-  claude-proxy set-password
-  claude-proxy set-all   IP:PORT USER
-  claude-proxy check
-  claude-proxy update
-  claude-proxy uninstall
-EOC
-    exit 1
-    ;;
-esac
-EOF
+step "Installing claude-proxy (sudo required)"
+curl -fsSL --proto '=https' --tlsv1.2 "${REPO_RAW}/claude-proxy" -o "$TMP_CTL"
+sudo cp "$TMP_CTL" "$CTL_PATH"
 sudo chmod +x "$CTL_PATH"
-echo "OK: $CTL_PATH"
+ok "$CTL_PATH"
 
-# ── 6. Save password to Keychain ─────────────────────────────────────────────
-step "Saving password to Keychain"
-if [[ "$SKIP_PASSWORD" == "true" ]]; then
-  echo "Skipping — keeping existing Keychain entry"
-else
-  security add-generic-password -a "$PROXY_USER" -s "$KEYCHAIN_SERVICE" -U -w
-  echo "OK: password stored"
+# ── 4. Migrate v1 config if present ────────────────────────────────────────
+# Delegation: claude-proxy is now installed, use it as single source of truth.
+
+LEGACY_CONF="$CONF_DIR/proxy.conf"
+if [[ -f "$LEGACY_CONF" && ! -f "$LEGACY_CONF.migrated" ]]; then
+  step "Migrating v1 config"
+  "$CTL_PATH" migrate
 fi
 
-# ── Done ─────────────────────────────────────────────────────────────────────
-echo
-echo "✅  Done!"
-echo
-echo "Test:"
-echo "  $WRAPPER_PATH --version"
-echo
-echo "Manage proxy:"
-echo "  claude-proxy status"
-echo "  claude-proxy set-all IP:PORT USER"
-echo
-echo "Note: if you updated from a previous version, run 'hash -r' or open a new terminal."
+# ── 5. Ensure default profile exists (fresh install) ──────────────────────
+
+if [[ ! -f "$CONF_DIR/profiles/default.conf" ]]; then
+  cat > "$CONF_DIR/profiles/default.conf" <<EOF
+CONFIG_VERSION=1
+PROFILE_CLAUDE_DIR="$HOME/.claude"
+PROFILE_PROXY=""
+EOF
+  ok "Created default profile → $HOME/.claude"
+fi
+if [[ ! -f "$CONF_DIR/active_profile" || ! -s "$CONF_DIR/active_profile" ]]; then
+  _tmp="$(mktemp "$CONF_DIR/active_profile.XXXXXX")"
+  echo "default" > "$_tmp"
+  mv "$_tmp" "$CONF_DIR/active_profile"
+fi
+
+# ── 6. First-run wizard (skipped on upgrade) ─────────────────────────────
+
+if [[ "$IS_UPGRADE" == "1" ]]; then
+  echo ""
+  ok "Upgrade complete. All your profiles and proxies are unchanged."
+  echo ""
+  echo "Version : $VERSION"
+  echo "Help    : claude-proxy help"
+  exit 0
+fi
+
+step "Initial setup (optional — press Enter to skip)"
+echo "   Tip: you can skip this entirely — the 'default' profile (~/.claude) is ready to use."
+echo ""
+
+read -r -p "Create an additional profile now? [y/N] " _do_profile
+if [[ "${_do_profile:-}" =~ ^[Yy]$ ]]; then
+  read -r -p "Profile name (e.g. work, personal): " _profile_name
+
+  if ! validate_name "${_profile_name:-}"; then
+    warn "Invalid name '${_profile_name:-}' — only letters, digits, - and _ allowed. Skipping."
+    _profile_name=""
+  fi
+
+  if [[ -n "$_profile_name" && "$_profile_name" != "default" ]]; then
+    # Delegate to claude-proxy — it handles settings copy interactively
+    "$CTL_PATH" profile create "$_profile_name"
+
+    read -r -p "Add a proxy for '$_profile_name'? [y/N] " _do_proxy
+    if [[ "${_do_proxy:-}" =~ ^[Yy]$ ]]; then
+      read -r -p "Proxy name (e.g. corp-lt): " _proxy_name
+      read -r -p "Proxy host (IP:PORT):      " _proxy_host
+      read -r -p "Proxy user:                " _proxy_user
+
+      _valid=true
+      validate_name "${_proxy_name:-}" || { warn "Invalid proxy name — skipping"; _valid=false; }
+      [[ "${_proxy_host:-}" =~ ^[^:]+:[0-9]+$ ]] || \
+        { warn "Invalid host format (need hostname:PORT) — skipping"; _valid=false; }
+      [[ -n "${_proxy_user:-}" ]] || { warn "User cannot be empty — skipping"; _valid=false; }
+
+      if [[ "$_valid" == "true" ]]; then
+        "$CTL_PATH" proxy create "$_proxy_name" "$_proxy_host" "$_proxy_user"
+        "$CTL_PATH" profile set-proxy "$_profile_name" "$_proxy_name"
+        ok "Proxy '$_proxy_name' linked to '$_profile_name'"
+      fi
+    fi
+  fi
+fi
+
+# ── Done ────────────────────────────────────────────────────────────────────
+
+echo ""
+ok "Installation complete! v$VERSION"
+echo ""
+echo "Run 'hash -r' or open a new terminal if commands aren't found yet."
+echo ""
+echo "Quick start:"
+echo "  claude-proxy profile list"
+echo "  claude-proxy proxy create corp-lt 10.0.0.1:3128 john"
+echo "  claude-proxy profile create work --from default"
+echo "  claude-proxy profile set-proxy work corp-lt"
+echo "  claude-proxy use work"
+echo "  proxied-claude"
+echo ""
+echo "JetBrains — Settings → Tools → Claude Code → Claude command:"
+echo "  $WRAPPER_PATH"
+echo ""
+echo "VS Code — settings.json:"
+echo "  \"claude.claudePath\": \"$WRAPPER_PATH\""
+echo ""
+echo "Full help: claude-proxy help"
