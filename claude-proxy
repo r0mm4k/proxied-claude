@@ -6,14 +6,14 @@ set -euo pipefail
 #
 # Profile commands:
 #   claude-proxy profile list
-#   claude-proxy profile create <n> [--from <source>]
+#   claude-proxy profile create <n> [--from <source>] [--include-projects]
 #   claude-proxy profile delete <n>
 #   claude-proxy profile rename  <old> <new>
 #   claude-proxy profile use     <n>
 #   claude-proxy profile show    [<n>]
 #   claude-proxy profile set-proxy     <profile> <proxy>
 #   claude-proxy profile unset-proxy   <profile>
-#   claude-proxy profile copy-settings <profile> --from <source>
+#   claude-proxy profile copy-settings <profile> --from <source> [--include-projects]
 #
 # Proxy commands:
 #   claude-proxy proxy list
@@ -387,14 +387,14 @@ claude-proxy $VERSION — manage Claude Code profiles and proxies
 
 Profile commands:
   claude-proxy profile list
-  claude-proxy profile create <n> [--from <source>]
+  claude-proxy profile create <n> [--from <source>] [--include-projects]
   claude-proxy profile delete <n>
   claude-proxy profile rename  <old> <new>
   claude-proxy profile use     <n>
   claude-proxy profile show    [<n>]
   claude-proxy profile set-proxy     <profile> <proxy>
   claude-proxy profile unset-proxy   <profile>
-  claude-proxy profile copy-settings <profile> --from <source>
+  claude-proxy profile copy-settings <profile> --from <source> [--include-projects]
 
 Proxy commands:
   claude-proxy proxy list
@@ -711,14 +711,14 @@ EOF
       cat <<'EOF'
 Usage:
   claude-proxy profile list
-  claude-proxy profile create <n> [--from <source>]
+  claude-proxy profile create <n> [--from <source>] [--include-projects]
   claude-proxy profile delete <n>
   claude-proxy profile rename  <old> <new>
   claude-proxy profile use     <n>
   claude-proxy profile show    [<n>]
   claude-proxy profile set-proxy     <profile> <proxy>
   claude-proxy profile unset-proxy   <profile>
-  claude-proxy profile copy-settings <profile> --from <source>
+  claude-proxy profile copy-settings <profile> --from <source> [--include-projects]
 EOF
       exit 1
       ;;
