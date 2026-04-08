@@ -17,14 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   existing v1 users see zero change in behavior
 - **`claude-proxy profile`** subcommands:
   - `list` — show all profiles with active marker
-  - `create <n> [--from <source>]` — create profile, optionally copy settings
+  - `create <n> [--from <source>] [--include-projects]` — create profile, optionally copy settings and project memory
   - `delete <n>` — remove profile config (Claude dir kept on disk)
   - `rename <old> <new>` — rename profile and move its Claude dir
   - `use <n>` — switch active profile
   - `show [<n>]` — show any profile's details without switching
   - `set-proxy <profile> <proxy>` — link a proxy to a profile
   - `unset-proxy <profile>` — run profile without proxy
-  - `copy-settings <profile> --from <source>` — copy portable config files between profiles
+  - `copy-settings <profile> --from <source> [--include-projects]` — copy portable config files between profiles; `--include-projects` also copies `projects/*/memory/` (per-project memory, not history)
 - **`claude-proxy proxy`** subcommands:
   - `list` — show all proxies and which profiles use them
   - `create <n> <host:port> <user>` — create proxy, save password to Keychain
@@ -44,7 +44,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `proxy.conf` → `proxy.conf.migrated` (kept as backup)
   - `profiles/default.conf` and `proxies/default.conf` created automatically
 - **`copy-settings`** copies: `settings.json`, `CLAUDE.md`, `keybindings.json`,
-  `policy-limits.json`, `hooks/`, `plugins/` — skips auth, history, cache
+  `policy-limits.json`, `hooks/`, `plugins/` — skips auth, history, cache;
+  `--include-projects` additionally copies `projects/*/memory/` (accumulated project context)
+- **Batch conflict UX** in `copy-settings`: when destination already has files, shows a
+  summary of all conflicts and asks once to confirm; non-interactive with conflicts → `die`
+  (replaces per-file warnings)
 - **Concurrency lock** — `mkdir`-based POSIX lock (`~/.config/proxied-claude/.lock`)
   prevents race conditions when two terminals run mutating commands simultaneously;
   read-only commands (`list`, `show`, `status`, `check`) skip locking

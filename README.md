@@ -122,10 +122,11 @@ Each profile is one Claude account with its own isolated config directory and an
 claude-proxy profile list
 # Lists all profiles with proxy and directory info
 
-claude-proxy profile create <n> [--from <source>]
+claude-proxy profile create <n> [--from <source>] [--include-projects]
 # Creates a new profile → ~/.claude-<n>
 # --from <source>: copies settings from <source> profile
-# Without --from: interactively asks which profile to copy settings from
+# --include-projects: also copies projects/*/memory/ (project context, not history)
+# Without --from: interactively asks which profile to copy settings from (and whether to include project memory)
 
 claude-proxy profile delete <n>
 # Deletes profile config (cannot delete 'default' or the active profile)
@@ -148,9 +149,12 @@ claude-proxy profile set-proxy <profile> <proxy>
 claude-proxy profile unset-proxy <profile>
 # Removes proxy link — profile runs with a direct connection
 
-claude-proxy profile copy-settings <profile> --from <source>
+claude-proxy profile copy-settings <profile> --from <source> [--include-projects]
 # Copies portable config files from <source> to <profile>
+# --include-projects: also copies projects/*/memory/ (project context, not history)
 # Does NOT copy: auth tokens, chat history, credentials
+# If destination has existing files: shows conflict summary and asks once to confirm;
+# non-interactive with conflicts → exits with error
 ```
 
 ### Proxies
@@ -343,10 +347,10 @@ Add to your `settings.json`:
 | `history.jsonl` | file | ❌ No | Chat history — stays in source profile |
 | `cache/` | dir | ❌ No | Runtime cache |
 | `backups/` | dir | ❌ No | Internal backups |
-| `projects/` | dir | ❌ No | Project data — account-specific |
+| `projects/*/memory/` | dir | ⚠️ Optional | Per-project memory — use `--include-projects` |
 | `telemetry/` | dir | ❌ No | Telemetry data |
 
-If a file already exists in the destination profile, a warning is shown before overwriting.
+If files already exist in the destination profile, a summary of conflicts is shown and a single confirmation is requested. In non-interactive mode, conflicts cause an error — run interactively to confirm.
 
 ---
 

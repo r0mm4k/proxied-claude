@@ -13,7 +13,7 @@ Planned improvements for future iterations.
   alias claude-work="PROXIED_CLAUDE_PROFILE=work proxied-claude"
   ```
 
-- [ ] 2. **`copy-settings --include-projects`** — optional flag to also copy the `projects/`
+- [x] 2. **`copy-settings --include-projects`** — optional flag to also copy the `projects/`
   directory (per-repo Claude data). Skipped by default — only useful if both profiles
   work on the same repositories:
   ```bash
@@ -62,6 +62,7 @@ Planned improvements for future iterations.
   # or via install.sh directly:
   VERSION=2.1.0 bash <(curl -fsSL .../install.sh)
   ```
+  Depends on: #20 (GitHub Releases).
 
 - [ ] 8. **Directory-based auto-switch** — automatically use the right profile based on
   current directory. A `.proxied-claude-profile` file in a repo root (or per-dir mapping
@@ -96,18 +97,47 @@ Planned improvements for future iterations.
 - [ ] 14. **`claude-proxy proxy check --watch`** — periodic proxy health monitoring,
   re-checking at a given interval until interrupted.
 
+- [ ] 15. **`claude-proxy proxy set-host` / `proxy set-user`** — change host or user of an
+  existing proxy without deleting and recreating it (which requires re-entering the password).
+  v1 had top-level `set-host` / `set-user`; v2 removed them but never added the equivalent
+  under `proxy`:
+  ```bash
+  claude-proxy proxy set-host corp-lt 10.0.0.2:3128
+  claude-proxy proxy set-user corp-lt john.doe
+  ```
+
 ---
 
 ## CI / DX
 
-- [ ] 15. **GitHub Actions** — auto-run `bats proxied-claude.bats` on push and pull requests.
+- [ ] 16. **GitHub Actions** — auto-run `bats proxied-claude.bats` on push and pull requests.
 
-- [ ] 16. **Shell completions (zsh / bash)** — tab-complete subcommands, profile names,
+- [ ] 17. **Shell completions (zsh / bash)** — tab-complete subcommands, profile names,
   and proxy names.
+
+- [ ] 18. **Split test suite into `tests/`** — move `proxied-claude.bats` into a `tests/`
+  directory and split by domain as the suite grows:
+  ```
+  tests/
+  ├── profiles.bats
+  ├── proxies.bats
+  ├── migration.bats
+  ├── lock.bats
+  └── copy_settings.bats
+  ```
+  Update `bats` invocation in README and GitHub Actions accordingly.
+
+- [ ] 19. **Shellcheck linting in CI** — add a shellcheck step to GitHub Actions alongside
+  the bats tests. Catches common shell pitfalls (quoting, word splitting, deprecated syntax)
+  across `proxied-claude`, `claude-proxy`, and `install.sh`.
+
+- [ ] 20. **GitHub Releases with version tags** — publish tagged releases (`v2.0.0`, `v2.1.0`)
+  so the `update` command can pin to a specific version (TODO #7) and users can audit what
+  they're installing.
 
 ---
 
 ## Platform
 
-- [ ] 17. **Linux support** — replace macOS `security` CLI with a pluggable Keychain backend:
+- [ ] 21. **Linux support** — replace macOS `security` CLI with a pluggable Keychain backend:
   `secret-tool` (GNOME Keyring), `pass`, or a permissions-restricted file as fallback.
