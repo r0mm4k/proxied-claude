@@ -54,7 +54,14 @@ Planned improvements for future iterations.
   active profile validity.
 
 - [ ] 7. **`claude-proxy update --version <n>`** — pin to a specific release instead of
-  always pulling `main`.
+  always pulling `main`. Two-part change:
+  - `install.sh`: respect `VERSION` env var to set `REPO_RAW` to a tagged ref instead of `main`
+  - `claude-proxy update --version <n>`: pass `VERSION=<n>` when invoking `install.sh`
+  ```bash
+  claude-proxy update --version 2.1.0
+  # or via install.sh directly:
+  VERSION=2.1.0 bash <(curl -fsSL .../install.sh)
+  ```
 
 - [ ] 8. **Directory-based auto-switch** — automatically use the right profile based on
   current directory. A `.proxied-claude-profile` file in a repo root (or per-dir mapping
@@ -91,26 +98,16 @@ Planned improvements for future iterations.
 
 ---
 
-## Installation
-
-- [ ] 15. **Install a specific version** — respect `VERSION` env var in `install.sh` and
-  download tagged assets instead of always fetching from `main`:
-  ```bash
-  VERSION=2.1.0 bash <(curl -fsSL .../install.sh)
-  ```
-
----
-
 ## CI / DX
 
-- [ ] 16. **GitHub Actions** — auto-run `bats proxied-claude.bats` on push and pull requests.
+- [ ] 15. **GitHub Actions** — auto-run `bats proxied-claude.bats` on push and pull requests.
 
-- [ ] 17. **Shell completions (zsh / bash)** — tab-complete subcommands, profile names,
+- [ ] 16. **Shell completions (zsh / bash)** — tab-complete subcommands, profile names,
   and proxy names.
 
 ---
 
 ## Platform
 
-- [ ] 18. **Linux support** — replace macOS `security` CLI with a pluggable Keychain backend:
+- [ ] 17. **Linux support** — replace macOS `security` CLI with a pluggable Keychain backend:
   `secret-tool` (GNOME Keyring), `pass`, or a permissions-restricted file as fallback.
