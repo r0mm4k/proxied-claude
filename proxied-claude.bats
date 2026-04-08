@@ -601,6 +601,68 @@ EOF
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# copy-settings — --include-projects
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@test "copy-settings: --include-projects copies project memory file" {
+  local src="$TEST_DIR/src" dst="$TEST_DIR/dst"
+  mkdir -p "$src/projects/my-repo/memory"
+  echo "# memory" > "$src/projects/my-repo/memory/MEMORY.md"
+  do_copy_settings "$src" "$dst" "src" "dst" 1
+  [ -f "$dst/projects/my-repo/memory/MEMORY.md" ]
+}
+
+@test "copy-settings: --include-projects preserves memory file content" {
+  local src="$TEST_DIR/src" dst="$TEST_DIR/dst"
+  mkdir -p "$src/projects/my-repo/memory"
+  echo "# custom context" > "$src/projects/my-repo/memory/MEMORY.md"
+  do_copy_settings "$src" "$dst" "src" "dst" 1
+  run cat "$dst/projects/my-repo/memory/MEMORY.md"
+  [ "$output" = "# custom context" ]
+}
+
+@test "copy-settings: --include-projects skips .jsonl history" {
+  local src="$TEST_DIR/src" dst="$TEST_DIR/dst"
+  mkdir -p "$src/projects/my-repo"
+  echo '{}' > "$src/projects/my-repo/session.jsonl"
+  do_copy_settings "$src" "$dst" "src" "dst" 1
+  [ ! -f "$dst/projects/my-repo/session.jsonl" ]
+}
+
+@test "copy-settings: --include-projects skips project dirs without memory/" {
+  local src="$TEST_DIR/src" dst="$TEST_DIR/dst"
+  mkdir -p "$src/projects/my-repo"
+  echo '{}' > "$src/projects/my-repo/session.jsonl"
+  do_copy_settings "$src" "$dst" "src" "dst" 1
+  [ ! -d "$dst/projects/my-repo" ]
+}
+
+@test "copy-settings: --include-projects no-op when projects/ missing" {
+  local src="$TEST_DIR/src" dst="$TEST_DIR/dst"
+  mkdir -p "$src" "$dst"
+  run do_copy_settings "$src" "$dst" "src" "dst" 1
+  [ "$status" -eq 0 ]
+}
+
+@test "copy-settings: --include-projects dies on project memory conflict (non-interactive)" {
+  local src="$TEST_DIR/src" dst="$TEST_DIR/dst"
+  mkdir -p "$src/projects/my-repo/memory" "$dst/projects/my-repo/memory"
+  echo "# src" > "$src/projects/my-repo/memory/MEMORY.md"
+  echo "# dst" > "$dst/projects/my-repo/memory/MEMORY.md"
+  run do_copy_settings "$src" "$dst" "src" "dst" 1
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"conflicting"* ]]
+}
+
+@test "copy-settings: without --include-projects does not copy project memory" {
+  local src="$TEST_DIR/src" dst="$TEST_DIR/dst"
+  mkdir -p "$src/projects/my-repo/memory"
+  echo "# memory" > "$src/projects/my-repo/memory/MEMORY.md"
+  do_copy_settings "$src" "$dst" "src" "dst"
+  [ ! -d "$dst/projects" ]
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # profiles_using_proxy
 # ═══════════════════════════════════════════════════════════════════════════════
 
