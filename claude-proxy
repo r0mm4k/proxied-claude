@@ -451,15 +451,18 @@ cmd_profile() {
     create)
       # Parse args (no lock needed yet)
       local name="${1:-}"; shift || true
-      [[ -n "$name" ]] || die "Usage: claude-proxy profile create <n> [--from <source>]"
+      [[ -n "$name" ]] || die "Usage: claude-proxy profile create <n> [--from <source>] [--include-projects]"
       validate_name "$name" "profile name"
-      local copy_from=""
+      local copy_from="" include_projects=0
       while [[ $# -gt 0 ]]; do
         case "$1" in
           --from) shift; copy_from="${1:-}"; shift ;;
+          --include-projects) include_projects=1; shift ;;
           *) die "Unknown option: $1" ;;
         esac
       done
+      [[ "$include_projects" == "1" && -z "$copy_from" ]] && \
+        die "--include-projects requires --from <source>"
       [[ -n "$copy_from" ]] && validate_name "$copy_from" "source profile name"
 
       # Lock → create conf + dir → release (short hold)
@@ -484,7 +487,7 @@ EOF
       if [[ -n "$copy_from" ]]; then
         require_profile "$copy_from"
         local src_dir; src_dir="$(profile_claude_dir "$copy_from")"
-        do_copy_settings "$src_dir" "$claude_dir" "$copy_from" "$name"
+        do_copy_settings "$src_dir" "$claude_dir" "$copy_from" "$name" "$include_projects"
       elif [[ -t 0 ]]; then
         shopt -s nullglob
         local existing=("$PROFILES_DIR"/*.conf)
@@ -505,7 +508,10 @@ EOF
           if [[ -n "$_choice" && "$_choice" != "skip" ]]; then
             if [[ -f "$PROFILES_DIR/${_choice}.conf" ]]; then
               local src_dir; src_dir="$(profile_claude_dir "$_choice")"
-              do_copy_settings "$src_dir" "$claude_dir" "$_choice" "$name"
+              local _inc_proj=0
+              read -r -p "  Copy projects too? [y/N] " _proj_choice
+              [[ "${_proj_choice:-}" =~ ^[Yy]$ ]] && _inc_proj=1
+              do_copy_settings "$src_dir" "$claude_dir" "$_choice" "$name" "$_inc_proj"
             else
               warn "Profile '$_choice' not found — skipping copy"
             fi
