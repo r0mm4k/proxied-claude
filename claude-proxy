@@ -633,22 +633,23 @@ EOF
 
     copy-settings)
       local name="${1:-}"; shift || true
-      [[ -n "$name" ]] || die "Usage: claude-proxy profile copy-settings <profile> --from <source>"
+      [[ -n "$name" ]] || die "Usage: claude-proxy profile copy-settings <profile> --from <source> [--include-projects]"
       validate_name "$name" "profile name"
-      local from_profile=""
+      local from_profile="" include_projects=0
       while [[ $# -gt 0 ]]; do
         case "$1" in
           --from) shift; from_profile="${1:-}"; shift ;;
+          --include-projects) include_projects=1; shift ;;
           *) die "Unknown option: $1" ;;
         esac
       done
-      [[ -n "$from_profile" ]] || die "Usage: claude-proxy profile copy-settings <profile> --from <source>"
+      [[ -n "$from_profile" ]] || die "Usage: claude-proxy profile copy-settings <profile> --from <source> [--include-projects]"
       validate_name "$from_profile" "source profile name"
       require_profile "$name"
       require_profile "$from_profile"
       local src_dir; src_dir="$(profile_claude_dir "$from_profile")"
       local dst_dir; dst_dir="$(profile_claude_dir "$name")"
-      do_copy_settings "$src_dir" "$dst_dir" "$from_profile" "$name"
+      do_copy_settings "$src_dir" "$dst_dir" "$from_profile" "$name" "$include_projects"
       ;;
 
     rename)
