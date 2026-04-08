@@ -39,7 +39,7 @@ teardown() {
 # ── Helpers (mirror exact implementations from claude-proxy) ──────────────────
 
 _define_helpers() {
-  die()  { echo "ERROR: $*" >&2; return 1; }
+  die()  { echo "ERROR: $*" >&2; exit 1; }
   ok()   { echo "✅ $*"; }
   info() { echo "   $*"; }
   warn() { echo "⚠️  $*"; }
@@ -90,12 +90,38 @@ _define_helpers() {
   SETTINGS_DIRS=("hooks" "plugins")
 
   do_copy_settings() {
-    local src_dir="$1" dst_dir="$2" src_label="$3" dst_label="$4"
+    local src_dir="$1" dst_dir="$2" src_label="$3" dst_label="$4" \
+          include_projects="${5:-0}"
     local copied=0
     mkdir -p "$dst_dir"
+    # Pass 1: collect conflicts
+    local conflicts=()
+    for f in "${SETTINGS_FILES[@]}"; do
+      [[ -f "$src_dir/$f" ]] || continue
+      [[ -f "$dst_dir/$f" ]] && conflicts+=("$f")
+    done
+    for d in "${SETTINGS_DIRS[@]}"; do
+      [[ -d "$src_dir/$d" ]] || continue
+      for item in "$src_dir/$d"/*; do
+        [[ -e "$item" ]] || continue
+        [[ -e "$dst_dir/$d/$(basename "$item")" ]] && conflicts+=("$d/$(basename "$item")")
+      done
+    done
+    # Resolve conflicts
+    if [[ ${#conflicts[@]} -gt 0 ]]; then
+      if [[ -t 0 ]]; then
+        warn "${#conflicts[@]} item(s) already exist in '$dst_label' and will be overwritten:"
+        for c in "${conflicts[@]}"; do info "  $c"; done
+        echo ""
+        read -r -p "  Overwrite? [y/N] " _confirm
+        [[ "${_confirm:-}" =~ ^[Yy]$ ]] || return 0
+      else
+        die "${#conflicts[@]} conflicting item(s) in '$dst_label'. Run interactively to confirm overwrite."
+      fi
+    fi
+    # Pass 2: copy
     for f in "${SETTINGS_FILES[@]}"; do
       if [[ -f "$src_dir/$f" ]]; then
-        [[ -f "$dst_dir/$f" ]] && warn "$f already exists — overwriting"
         cp "$src_dir/$f" "$dst_dir/$f"
         info "Copied $f"
         (( copied++ )) || true
@@ -107,9 +133,7 @@ _define_helpers() {
         local dir_copied=0
         for item in "$src_dir/$d"/*; do
           [[ -e "$item" ]] || continue
-          local dest_item="$dst_dir/$d/$(basename "$item")"
-          [[ -e "$dest_item" ]] && warn "$d/$(basename "$item") already exists — overwriting"
-          cp -r "$item" "$dest_item"
+          cp -r "$item" "$dst_dir/$d/$(basename "$item")"
           (( dir_copied++ )) || true
         done
         [[ $dir_copied -gt 0 ]] && { info "Copied $d/"; (( copied++ )) || true; }
