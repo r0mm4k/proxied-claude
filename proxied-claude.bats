@@ -511,23 +511,24 @@ EOF
   [ "$output" = "0" ]
 }
 
-@test "copy-settings: warns on overwrite" {
+@test "copy-settings: dies on conflict in non-interactive mode" {
   local src="$TEST_DIR/src" dst="$TEST_DIR/dst"
   mkdir -p "$src" "$dst"
   echo '{"theme":"dark"}' > "$src/settings.json"
   echo '{"theme":"light"}' > "$dst/settings.json"
   run do_copy_settings "$src" "$dst" "src" "dst"
-  [[ "$output" == *"already exists"* ]]
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"conflicting"* ]]
 }
 
-@test "copy-settings: overwrites existing file despite warning" {
+@test "copy-settings: dst unchanged on non-interactive conflict" {
   local src="$TEST_DIR/src" dst="$TEST_DIR/dst"
   mkdir -p "$src" "$dst"
   echo '{"theme":"dark"}' > "$src/settings.json"
   echo '{"theme":"light"}' > "$dst/settings.json"
-  do_copy_settings "$src" "$dst" "src" "dst"
+  run do_copy_settings "$src" "$dst" "src" "dst"
   run cat "$dst/settings.json"
-  [ "$output" = '{"theme":"dark"}' ]
+  [ "$output" = '{"theme":"light"}' ]
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
