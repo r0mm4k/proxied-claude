@@ -175,6 +175,20 @@ do_copy_settings() {
     done
   done
 
+  if [[ "$include_projects" == "1" ]]; then
+    shopt -s nullglob
+    for proj_dir in "$src_dir/projects"/*/; do
+      [[ -d "$proj_dir/memory" ]] || continue
+      local repo; repo="$(basename "$proj_dir")"
+      for mf in "$proj_dir/memory"/*; do
+        [[ -e "$mf" ]] || continue
+        [[ -e "$dst_dir/projects/$repo/memory/$(basename "$mf")" ]] && \
+          conflicts+=("projects/$repo/memory/$(basename "$mf")")
+      done
+    done
+    shopt -u nullglob
+  fi
+
   # Resolve conflicts
   if [[ ${#conflicts[@]} -gt 0 ]]; then
     if [[ -t 0 ]]; then
@@ -211,6 +225,21 @@ do_copy_settings() {
       fi
     fi
   done
+
+  if [[ "$include_projects" == "1" ]]; then
+    shopt -s nullglob
+    for proj_dir in "$src_dir/projects"/*/; do
+      [[ -d "$proj_dir/memory" ]] || continue
+      local repo; repo="$(basename "$proj_dir")"
+      mkdir -p "$dst_dir/projects/$repo/memory"
+      for mf in "$proj_dir/memory"/*; do
+        [[ -e "$mf" ]] || continue
+        cp -r "$mf" "$dst_dir/projects/$repo/memory/$(basename "$mf")"
+        (( copied++ )) || true
+      done
+    done
+    shopt -u nullglob
+  fi
 
   if [[ $copied -eq 0 ]]; then
     info "No settings found in '$src_label' (nothing copied)"

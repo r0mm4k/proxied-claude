@@ -107,6 +107,19 @@ _define_helpers() {
         [[ -e "$dst_dir/$d/$(basename "$item")" ]] && conflicts+=("$d/$(basename "$item")")
       done
     done
+    if [[ "$include_projects" == "1" ]]; then
+      shopt -s nullglob
+      for proj_dir in "$src_dir/projects"/*/; do
+        [[ -d "$proj_dir/memory" ]] || continue
+        local repo; repo="$(basename "$proj_dir")"
+        for mf in "$proj_dir/memory"/*; do
+          [[ -e "$mf" ]] || continue
+          [[ -e "$dst_dir/projects/$repo/memory/$(basename "$mf")" ]] && \
+            conflicts+=("projects/$repo/memory/$(basename "$mf")")
+        done
+      done
+      shopt -u nullglob
+    fi
     # Resolve conflicts
     if [[ ${#conflicts[@]} -gt 0 ]]; then
       if [[ -t 0 ]]; then
@@ -139,6 +152,20 @@ _define_helpers() {
         [[ $dir_copied -gt 0 ]] && { info "Copied $d/"; (( copied++ )) || true; }
       fi
     done
+    if [[ "$include_projects" == "1" ]]; then
+      shopt -s nullglob
+      for proj_dir in "$src_dir/projects"/*/; do
+        [[ -d "$proj_dir/memory" ]] || continue
+        local repo; repo="$(basename "$proj_dir")"
+        mkdir -p "$dst_dir/projects/$repo/memory"
+        for mf in "$proj_dir/memory"/*; do
+          [[ -e "$mf" ]] || continue
+          cp -r "$mf" "$dst_dir/projects/$repo/memory/$(basename "$mf")"
+          (( copied++ )) || true
+        done
+      done
+      shopt -u nullglob
+    fi
     [[ $copied -eq 0 ]] && info "No settings found in '$src_label'" || \
       ok "Settings copied from '$src_label' → '$dst_label'"
   }
