@@ -375,6 +375,9 @@ printf '%s' "${PREFIX}ctx:..."
 If proxied-claude is not installed, or no profile is active, `PREFIX` is empty and the
 statusline is unchanged.
 
+> Full example statusline with proxied-claude integration:
+> [gist.github.com/r0mm4k/1781d46e9b3c83c34253421d828924b5](https://gist.github.com/r0mm4k/1781d46e9b3c83c34253421d828924b5)
+
 ---
 
 ## What gets copied with `copy-settings`
