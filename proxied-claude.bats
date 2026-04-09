@@ -86,6 +86,13 @@ _define_helpers() {
     fi
   }
 
+  dir_has_data() {
+    local dir="$1"
+    [[ -d "$dir" ]] || return 1
+    find "$dir" -mindepth 1 -maxdepth 1 -not -name ".DS_Store" \
+         -print -quit 2>/dev/null | grep -q .
+  }
+
   SETTINGS_FILES=("settings.json" "CLAUDE.md" "keybindings.json" "policy-limits.json")
   SETTINGS_DIRS=("hooks" "plugins")
 
@@ -1345,6 +1352,38 @@ EOF
   make_profile "myaccount"
   run read_conf "$PROFILES_DIR/myaccount.conf" PROFILE_CLAUDE_DIR
   [ "$output" = "$HOME/.claude-myaccount" ]
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# dir_has_data
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@test "dir_has_data: non-empty dir returns true" {
+  local dir="$TEST_DIR/claude-work"
+  mkdir -p "$dir"
+  touch "$dir/settings.json"
+  run dir_has_data "$dir"
+  [ "$status" -eq 0 ]
+}
+
+@test "dir_has_data: dir with only .DS_Store returns false" {
+  local dir="$TEST_DIR/claude-work"
+  mkdir -p "$dir"
+  touch "$dir/.DS_Store"
+  run dir_has_data "$dir"
+  [ "$status" -eq 1 ]
+}
+
+@test "dir_has_data: empty dir returns false" {
+  local dir="$TEST_DIR/claude-work"
+  mkdir -p "$dir"
+  run dir_has_data "$dir"
+  [ "$status" -eq 1 ]
+}
+
+@test "dir_has_data: nonexistent dir returns false" {
+  run dir_has_data "$TEST_DIR/does-not-exist"
+  [ "$status" -eq 1 ]
 }
 
 @test "proxy create: conf has all required keys" {

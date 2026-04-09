@@ -72,6 +72,14 @@ warn() { echo "⚠️  $*"; }
 
 ensure_dirs() { mkdir -p "$PROFILES_DIR" "$PROXIES_DIR"; }
 
+# Returns 0 if dir exists and has data (excluding .DS_Store), 1 otherwise.
+dir_has_data() {
+  local dir="$1"
+  [[ -d "$dir" ]] || return 1
+  find "$dir" -mindepth 1 -maxdepth 1 -not -name ".DS_Store" \
+       -print -quit 2>/dev/null | grep -q .
+}
+
 # Fast conf reader — grep-based, no fork, no source, no injection risk.
 # Reads KEY="value" or KEY=value from a conf file.
 read_conf() {
