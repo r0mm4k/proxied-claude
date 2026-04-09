@@ -91,8 +91,12 @@ Planned improvements for future iterations.
 - [ ] 12. **`--json` output** — machine-readable output for `status`, `profile list`,
   `proxy list`. Useful for scripting and IDE integrations.
 
-- [ ] 13. **Shell prompt integration** — show active profile in `$PS1`, similar to
-  git branch display. Ships as an optional snippet in README.
+- [ ] 13. **Active profile display** — lightweight shell helper that reads
+  `active_profile` + `profiles/<n>.conf` (no subprocess) and returns
+  `profile › proxy` (or just `profile` when no proxy, or nothing when
+  proxied-claude is not configured). Ships as two optional snippets in README:
+  - **zsh/bash `$PS1`** — like git branch display
+  - **Claude Code `statusline.sh`** — appended to the existing statusline hook
 
 - [ ] 14. **`claude-proxy proxy check --watch`** — periodic proxy health monitoring,
   re-checking at a given interval until interrupted.
