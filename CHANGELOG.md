@@ -94,6 +94,10 @@ s  - `proxy.conf` deleted after successful migration (no longer kept as `.migrat
   > cryptic error. Run `claude-proxy migrate` or `claude-proxy update` to
   > migrate your config automatically.
 
+### Fixed
+- **`proxy list` HOST column** — widened from 30 to 38 chars to prevent long
+  usernames from running into the "USED BY PROFILES" column
+
 ### Security
 - **Conf files are no longer sourced as bash** — grep-based parsing eliminates
   the entire class of injection attacks via malformed config values
