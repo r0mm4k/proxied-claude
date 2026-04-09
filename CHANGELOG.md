@@ -33,7 +33,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `set-password <n>` — update password in Keychain
   - `show <n>` — show proxy details (password never shown)
   - `check <n>` — three-level health check: TCP → proxy auth (407 detection) → Anthropic API
-- **Shortcuts**: `claude-proxy use`, `status`, `check`, `version`, `help`, `migrate`
+- **`active_dir` symlink** — `~/.config/proxied-claude/active_dir` always points to the
+  active profile's Claude dir; JetBrains/VS Code Config directory field set once and never
+  needs updating when switching profiles
+- **`PROXIED_CLAUDE_PROFILE` env var** — per-session profile override without changing
+  global `active_profile`; other terminals and the IDE are unaffected:
+  ```bash
+  PROXIED_CLAUDE_PROFILE=work proxied-claude
+  alias claude-work="PROXIED_CLAUDE_PROFILE=work proxied-claude"
+  ```
+- **`claude-proxy run <profile>`** — user-friendly shortcut for the env var; passes
+  additional args through to Claude (`claude-proxy run work --dangerously-skip-permissions`)
+- **`display_path()`** — human-readable `~`-substitution in all path output (Claude dir,
+  delete hints); IDE-copy fields (status IDE section) keep full absolute paths
+- **IDE integration section in `claude-proxy status`** — shows `Command` and `Config dir`
+  values ready for copy-paste into JetBrains / VS Code settings
+- **IDE integration section in `claude-proxy help`** — shows both fields with a note to
+  run `claude-proxy status` for current values
+- **Shortcuts**: `claude-proxy use`, `claude-proxy run`, `status`, `check`, `version`, `help`, `migrate`
 - **`claude-proxy status`** — full overview: active profile + all profiles + all proxies
 - **`claude-proxy migrate`** — manual v1 → v2 migration command
 - **`claude-proxy version` / `--version` / `-v`** — print version
@@ -41,7 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Auto-migration from v1** — `install.sh` and `claude-proxy migrate`
   detect and migrate `proxy.conf` automatically:
   - Keychain entry renamed `claude-proxy` → `claude-proxy:default` (old entry removed)
-s  - `proxy.conf` deleted after successful migration (no longer kept as `.migrated`)
+  - `proxy.conf` deleted after successful migration (no longer kept as `.migrated`)
   - `profiles/default.conf` and `proxies/default.conf` created automatically
 - **`copy-settings`** copies: `settings.json`, `CLAUDE.md`, `keybindings.json`,
   `policy-limits.json`, `hooks/`, `plugins/` — skips auth, history, cache;
@@ -66,7 +83,7 @@ s  - `proxy.conf` deleted after successful migration (no longer kept as `.migrat
 - **`CONFIG_VERSION=1`** in all conf files — foundation for future migrations
 - **Friendly error messages** for removed v1 commands (`set-all`, `set-host`, `set-user`)
 - **JetBrains and VS Code** integration documented in README
-- **Test suite** — `proxied-claude.bats` (154 tests, requires `bats-core`)
+- **Test suite** — `proxied-claude.bats` (171 tests, requires `bats-core`)
 
 ### Changed
 - **`proxied-claude` is now a thin, fast launcher** (~99 lines) — transparent wrapper,
