@@ -170,3 +170,4 @@ Planned improvements for future iterations.
   `secret-tool` (GNOME Keyring), `pass`, or a permissions-restricted file as fallback.
 
   claude-proxy profile create как будто здесь не хватает параметра сразу и прокси назначить? как думаешь? возможно это будет и полезно при миграции и дефолт?
+  информирование о новое версии? флоу для тех кто не хочет обновляться на v2? подтверждение перед update (возможно всегда нужно?)?
