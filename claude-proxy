@@ -26,6 +26,7 @@ set -euo pipefail
 #
 # Shortcuts:
 #   claude-proxy use <n>      → profile use
+#   claude-proxy run <n>      → launch with profile (no global switch)
 #   claude-proxy status          → full overview
 #   claude-proxy check           → proxy check (active profile's proxy)
 #   claude-proxy version / --version / -v
@@ -430,6 +431,7 @@ Proxy commands:
 
 Shortcuts:
   claude-proxy use <n>     → profile use
+  claude-proxy run <n>     → launch with profile (no global switch)
   claude-proxy status         → full overview (active profile + all lists)
   claude-proxy check          → proxy check (active profile's proxy)
   claude-proxy version        → print version
@@ -1151,6 +1153,14 @@ case "$cmd" in
     [[ -d "$CONF_DIR" ]]     && { rm -rf "$CONF_DIR";         ok "Removed $CONF_DIR";     } || true
     echo ""
     ok "Uninstalled. Your Claude account dirs (~/.claude*) were kept."
+    ;;
+
+  run)
+    [[ -n "${1:-}" ]] || die "Usage: claude-proxy run <profile>"
+    _run_profile="$1"; shift || true
+    validate_name "$_run_profile" "profile name"
+    require_profile "$_run_profile"
+    PROXIED_CLAUDE_PROFILE="$_run_profile" exec "$WRAPPER_PATH" "$@"
     ;;
 
   _sync-active-dir)

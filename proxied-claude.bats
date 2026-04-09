@@ -1428,6 +1428,18 @@ EOF
   [ "${count:-0}" -ge 2 ]
 }
 
+@test "architecture: run command in help text" {
+  local count
+  count="$(grep -c "claude-proxy run" "$(dirname "$BATS_TEST_FILENAME")/claude-proxy" 2>/dev/null; true)"
+  [ "${count:-0}" -ge 1 ]
+}
+
+@test "architecture: run command in dispatch" {
+  local count
+  count="$(grep -c "^  run)" "$(dirname "$BATS_TEST_FILENAME")/claude-proxy" 2>/dev/null; true)"
+  [ "${count:-0}" -eq 1 ]
+}
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # profile use
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1482,6 +1494,42 @@ EOF
 @test "profile override: falls back to default when no active_profile and no override" {
   run resolve_profile
   [ "$output" = "default" ]
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# claude-proxy run (validation logic mirrored)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+require_profile() {
+  local name="$1"
+  [[ -f "$PROFILES_DIR/${name}.conf" ]] || { echo "ERROR: Profile '$name' does not exist." >&2; return 1; }
+}
+
+run_validate() {
+  local name="${1:-}"
+  [[ -n "$name" ]] || { echo "Usage: claude-proxy run <profile>" >&2; return 1; }
+  validate_name "$name" "profile name" || return 1
+  require_profile "$name" || return 1
+  echo "ok:$name"
+}
+
+@test "run: fails with no args" {
+  run run_validate
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Usage"* ]]
+}
+
+@test "run: fails for non-existent profile" {
+  run run_validate "nonexistent"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"does not exist"* ]]
+}
+
+@test "run: succeeds for existing profile" {
+  make_profile "work"
+  run run_validate "work"
+  [ "$status" -eq 0 ]
+  [ "$output" = "ok:work" ]
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
