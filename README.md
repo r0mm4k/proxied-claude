@@ -343,7 +343,7 @@ If you use a custom `statusline.sh` hook, you can prepend the active profile and
 to the status line:
 
 ```
-personal › home-de | ctx:30% | ▲13 ▼5 | $1.22 | 5h:15% ~4h 7d:65% ~2d
+personal (home-de) | ctx:30% | ▲13 ▼5 | $1.22 | 5h:15% ~4h 7d:65% ~2d
 ```
 
 Add to your `~/.claude-<profile>/hooks/statusline.sh`, near the top after color declarations:
@@ -358,7 +358,7 @@ _pc_info() {
   [[ -n "$profile" ]] || return 0
   local proxy; proxy=$(grep -m1 '^PROFILE_PROXY=' "${conf}/profiles/${profile}.conf" 2>/dev/null || true)
   proxy="${proxy#PROFILE_PROXY=}"; proxy="${proxy#\"}"; proxy="${proxy%\"}"
-  [[ -n "$proxy" ]] && printf '%s' "${CYAN}${profile}${R} ${DIM}›${R} ${proxy}" \
+  [[ -n "$proxy" ]] && printf '%s' "${CYAN}${profile}${R} ${DIM}(${proxy})${R}" \
                     || printf '%s' "${CYAN}${profile}${R}"
 }
 
