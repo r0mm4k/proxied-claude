@@ -27,11 +27,13 @@ Developers who:
 
 ```
 proxied-claude
-  └─ reads ~/.config/proxied-claude/active_profile
+  └─ reads PROXIED_CLAUDE_PROFILE env var (per-session override, optional)
+  └─ reads ~/.config/proxied-claude/active_profile (fallback)
   └─ loads profiles/<n>.conf       → CLAUDE_CONFIG_DIR, linked proxy name
   └─ loads proxies/<proxy>.conf    → host, user, keychain service name
   └─ fetches password from macOS Keychain (never written to disk)
   └─ exports CLAUDE_CONFIG_DIR + HTTP_PROXY / HTTPS_PROXY
+  └─ updates active_dir symlink (IDE integration, skipped when override active)
   └─ exec → claude (original binary)
 ```
 
@@ -82,7 +84,7 @@ Your proxy settings are migrated automatically:
 - `proxy.conf` → `profiles/default.conf` + `proxies/default.conf`
 - Keychain entry renamed from `claude-proxy` → `claude-proxy:default`
 - Old Keychain entry removed
-- `proxy.conf` renamed to `proxy.conf.migrated` (safe to delete)
+- `proxy.conf` deleted after successful migration
 
 Everything works exactly as before — no action needed.
 
@@ -195,7 +197,8 @@ claude-proxy proxy check <n>
 ### Shortcuts
 
 ```bash
-claude-proxy use <n>     # → profile use
+claude-proxy use <n>     # → profile use (changes global active profile)
+claude-proxy run <n>     # → launch with profile without changing global active profile
 claude-proxy status         # → full overview (active profile + all profiles + all proxies)
 claude-proxy check          # → proxy check for the active profile's proxy
 claude-proxy version        # print version
@@ -211,6 +214,7 @@ claude-proxy uninstall      # remove binaries + config (keeps ~/.claude* dirs)
 ```
 ~/.config/proxied-claude/
   active_profile              ← name of the currently active profile
+  active_dir                  ← symlink → active profile's Claude dir (for IDE)
   .lock/                      ← concurrency lock (auto-managed)
   profiles/
     default.conf              ← always exists, points to ~/.claude
