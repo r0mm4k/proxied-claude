@@ -37,6 +37,10 @@ bats proxied-claude.bats --filter lock
 
 **`__CLAUDE_BIN__`** — literal placeholder in source `proxied-claude`. Patched by `install.sh` via `sed`. Never hardcode a path.
 
+## Workflow
+
+After completing a brainstorm/plan/implement cycle, delete the generated spec and plan files and their parent directories (`docs/superpowers/`). These are temporary scaffolding — do not commit or keep them in the repo.
+
 ## Gotchas
 
 - `proxied-claude` cannot be tested end-to-end (does `exec claude`). Test logic via mirrored helpers in bats.
