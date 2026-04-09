@@ -289,6 +289,16 @@ EOF
         echo "ERROR: '$cmd' was a v1 command." >&2; return 1 ;;
     esac
   }
+
+  _pc_info() {
+    local conf="${CONF_DIR}"
+    [[ -f "${conf}/active_profile" ]] || return 0
+    local profile; profile=$(tr -d '[:space:]' < "${conf}/active_profile")
+    [[ -n "$profile" ]] || return 0
+    local proxy; proxy=$(grep -m1 '^PROFILE_PROXY=' "${conf}/profiles/${profile}.conf" 2>/dev/null || true)
+    proxy="${proxy#PROFILE_PROXY=}"; proxy="${proxy#\"}"; proxy="${proxy%\"}"
+    [[ -n "$proxy" ]] && printf '%s › %s' "$profile" "$proxy" || printf '%s' "$profile"
+  }
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1551,4 +1561,55 @@ EOF
 @test "v1 command: valid commands pass through" {
   run v1_cmd_check "status"
   [ "$status" -eq 0 ]
+}
+
+# statusline
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@test "statusline _pc_info: no active_profile → empty output" {
+  _define_helpers
+  run _pc_info
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "statusline _pc_info: empty active_profile → empty output" {
+  _define_helpers
+  echo "" > "$ACTIVE_FILE"
+  run _pc_info
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "statusline _pc_info: profile with no proxy → profile name only" {
+  _define_helpers
+  echo "personal" > "$ACTIVE_FILE"
+  mkdir -p "$CONF_DIR/profiles"
+  printf 'CONFIG_VERSION=1\nPROFILE_CLAUDE_DIR="%s"\nPROFILE_PROXY=""\n' \
+    "$HOME/.claude-personal" > "$CONF_DIR/profiles/personal.conf"
+  run _pc_info
+  [ "$status" -eq 0 ]
+  [ "$output" = "personal" ]
+}
+
+@test "statusline _pc_info: profile with proxy → profile › proxy" {
+  _define_helpers
+  echo "personal" > "$ACTIVE_FILE"
+  mkdir -p "$CONF_DIR/profiles"
+  printf 'CONFIG_VERSION=1\nPROFILE_CLAUDE_DIR="%s"\nPROFILE_PROXY="nigeria"\n' \
+    "$HOME/.claude-personal" > "$CONF_DIR/profiles/personal.conf"
+  run _pc_info
+  [ "$status" -eq 0 ]
+  [ "$output" = "personal › nigeria" ]
+}
+
+@test "statusline _pc_info: whitespace in active_profile is stripped" {
+  _define_helpers
+  printf '  work  \n' > "$ACTIVE_FILE"
+  mkdir -p "$CONF_DIR/profiles"
+  printf 'CONFIG_VERSION=1\nPROFILE_CLAUDE_DIR="%s"\nPROFILE_PROXY="germany"\n' \
+    "$HOME/.claude-work" > "$CONF_DIR/profiles/work.conf"
+  run _pc_info
+  [ "$status" -eq 0 ]
+  [ "$output" = "work › germany" ]
 }
