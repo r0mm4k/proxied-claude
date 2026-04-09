@@ -343,7 +343,7 @@ If you use a custom `statusline.sh` hook, you can prepend the active profile and
 to the status line:
 
 ```
-personal › nigeria | ctx:30% | ▲13 ▼5 | $1.22 | 5h:15% ~4h 7d:65% ~2d
+personal › home-de | ctx:30% | ▲13 ▼5 | $1.22 | 5h:15% ~4h 7d:65% ~2d
 ```
 
 Add to your `~/.claude-<profile>/hooks/statusline.sh`, near the top after color declarations:
