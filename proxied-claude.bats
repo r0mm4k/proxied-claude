@@ -1402,6 +1402,11 @@ EOF
   [ "${count:-0}" -eq 3 ]
 }
 
+@test "architecture: _sync-active-dir not in print_help" {
+  run grep "_sync-active-dir" "$(dirname "$BATS_TEST_FILENAME")/claude-proxy"
+  [[ "$output" != *"print_help"* ]]
+}
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # profile use
 # ═══════════════════════════════════════════════════════════════════════════════

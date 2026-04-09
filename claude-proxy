@@ -1153,6 +1153,10 @@ case "$cmd" in
     ok "Uninstalled. Your Claude account dirs (~/.claude*) were kept."
     ;;
 
+  _sync-active-dir)
+    ln -sfn "$(profile_claude_dir "$(active_profile)")" "$ACTIVE_DIR"
+    ;;
+
   "")
     print_help
     ;;

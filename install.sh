@@ -107,6 +107,7 @@ if [[ ! -f "$CONF_DIR/active_profile" || ! -s "$CONF_DIR/active_profile" ]]; the
   echo "default" > "$_tmp"
   mv "$_tmp" "$CONF_DIR/active_profile"
 fi
+"$CTL_PATH" _sync-active-dir
 
 # ── 6. First-run wizard (skipped on upgrade) ─────────────────────────────
 
