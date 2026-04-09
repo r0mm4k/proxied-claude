@@ -197,8 +197,8 @@ claude-proxy proxy check <n>
 ### Shortcuts
 
 ```bash
-claude-proxy use <n>     # → profile use (changes global active profile)
-claude-proxy run <n>     # → launch with profile without changing global active profile
+claude-proxy use <n>        # → profile use (changes global active profile)
+claude-proxy run <n>        # → launch with profile without changing global active profile
 claude-proxy status         # → full overview (active profile + all profiles + all proxies)
 claude-proxy check          # → proxy check for the active profile's proxy
 claude-proxy version        # print version
@@ -361,8 +361,11 @@ CYAN=$'\033[36m'
 
 _pc_info() {
   local conf="${HOME}/.config/proxied-claude"
-  [[ -f "${conf}/active_profile" ]] || return 0
-  local profile; profile=$(tr -d '[:space:]' < "${conf}/active_profile")
+  local profile="${PROXIED_CLAUDE_PROFILE:-}"
+  if [[ -z "$profile" ]]; then
+    [[ -f "${conf}/active_profile" ]] || return 0
+    profile=$(tr -d '[:space:]' < "${conf}/active_profile")
+  fi
   [[ -n "$profile" ]] || return 0
   local proxy; proxy=$(grep -m1 '^PROFILE_PROXY=' "${conf}/profiles/${profile}.conf" 2>/dev/null || true)
   proxy="${proxy#PROFILE_PROXY=}"; proxy="${proxy#\"}"; proxy="${proxy%\"}"

@@ -69,8 +69,7 @@ die()  { echo "ERROR: $*" >&2; exit 1; }
 ok()   { echo "✅ $*"; }
 info() { echo "   $*"; }
 warn() { echo "⚠️  $*"; }
-# Replaces $HOME with ~ for human-readable display. Never use for IDE paths (~ not expanded by all tools).
-display_path() { echo "${1/#$HOME/\~}"; }
+display_path() { echo "${1/#$HOME/~}"; }
 
 # ── Core helpers ─────────────────────────────────────────────────────────────
 
@@ -445,7 +444,6 @@ Shortcuts:
 IDE integration (JetBrains / VS Code):
   Claude command : /usr/local/bin/proxied-claude
   Config dir     : ~/.config/proxied-claude/active_dir
-  Run 'claude-proxy status' to see current values.
 
 EOF
 }
@@ -1095,9 +1093,10 @@ case "$cmd" in
         printf "  %-20s  %s@%s\n" "$_st_n" "${_st_u:-?}" "${_st_h:-?}"
       done
     fi
+    echo ""
     echo "  ── IDE integration ────────────────────────────"
     echo "  Command    : $WRAPPER_PATH"
-    echo "  Config dir : $CONF_DIR/active_dir"
+    echo "  Config dir : $(display_path "$CONF_DIR/active_dir")"
     echo ""
     ;;
 

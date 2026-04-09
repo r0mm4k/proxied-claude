@@ -322,8 +322,11 @@ EOF
 
   _pc_info() {
     local conf="${CONF_DIR}"
-    [[ -f "${conf}/active_profile" ]] || return 0
-    local profile; profile=$(tr -d '[:space:]' < "${conf}/active_profile")
+    local profile="${PROXIED_CLAUDE_PROFILE:-}"
+    if [[ -z "$profile" ]]; then
+      [[ -f "${conf}/active_profile" ]] || return 0
+      profile=$(tr -d '[:space:]' < "${conf}/active_profile")
+    fi
     [[ -n "$profile" ]] || return 0
     local proxy; proxy=$(grep -m1 '^PROFILE_PROXY=' "${conf}/profiles/${profile}.conf" 2>/dev/null || true)
     proxy="${proxy#PROFILE_PROXY=}"; proxy="${proxy#\"}"; proxy="${proxy%\"}"
@@ -1807,4 +1810,24 @@ run_validate() {
   run _pc_info
   [ "$status" -eq 0 ]
   [ "$output" = "orphan" ]
+}
+
+@test "statusline _pc_info: PROXIED_CLAUDE_PROFILE overrides active_profile" {
+  echo "personal" > "$ACTIVE_FILE"
+  mkdir -p "$CONF_DIR/profiles"
+  printf 'CONFIG_VERSION=1\nPROFILE_CLAUDE_DIR="%s"\nPROFILE_PROXY="corp"\n' \
+    "$HOME/.claude-work" > "$CONF_DIR/profiles/work.conf"
+  PROXIED_CLAUDE_PROFILE="work" run _pc_info
+  [ "$status" -eq 0 ]
+  [ "$output" = "work (corp)" ]
+}
+
+@test "statusline _pc_info: empty PROXIED_CLAUDE_PROFILE falls back to active_profile" {
+  echo "personal" > "$ACTIVE_FILE"
+  mkdir -p "$CONF_DIR/profiles"
+  printf 'CONFIG_VERSION=1\nPROFILE_CLAUDE_DIR="%s"\nPROFILE_PROXY=""\n' \
+    "$HOME/.claude-personal" > "$CONF_DIR/profiles/personal.conf"
+  PROXIED_CLAUDE_PROFILE="" run _pc_info
+  [ "$status" -eq 0 ]
+  [ "$output" = "personal" ]
 }
