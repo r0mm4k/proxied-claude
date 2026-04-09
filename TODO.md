@@ -42,12 +42,6 @@ Planned improvements for future iterations.
   - **Y**: `rm -rf ~/.claude-work && mkdir`, show normal login note
   - Non-interactive (`-t 0` false): silently use existing dir + `warn` (no prompt)
 
-- [ ] 4. **`claude-proxy check [<proxy>]`** — make the proxy name argument optional.
-  Currently `claude-proxy check` (no args) works; `claude-proxy check corp-lt` falls
-  through to unknown command. Should be a shortcut for `claude-proxy proxy check corp-lt`.
-  
-  А нужно ли это?
-
 - [ ] 5. **`claude-proxy backup` / `restore`** — export all config to a tarball for machine
   migration. Includes `profiles/`, `proxies/`, `active_profile`. Never includes Keychain
   passwords — user re-enters them via `claude-proxy proxy set-password <n>` after restore.
@@ -67,15 +61,55 @@ Planned improvements for future iterations.
   ```
   Depends on: #20 (GitHub Releases).
 
-- [ ] 8. **Directory-based auto-switch** — automatically use the right profile based on
-  current directory. A `.proxied-claude-profile` file in a repo root (or per-dir mapping
-  in conf) overrides `active_profile` for that session. Works like `git config --local`:
-  ```bash
-  echo "work" > ~/work/myproject/.proxied-claude-profile
-  # proxied-claude in that dir picks up 'work' profile automatically
+- [ ] 8. **Directory-based auto-switch** — `proxied-claude` automatically picks the right
+  profile based on a `.proxied-claude-profile` file in the project root (or any parent
+  directory, walking up like `git` searches for `.git`). This is the correct solution
+  for **parallel multi-window IDE** use: each project declares its profile once, both
+  IDE windows work simultaneously without interference.
+
+  **Priority chain in `proxied-claude`:**
   ```
-  А когда после авто идешь в репозиторий который без .proxied-claude-profile, что будет?
-  И может назвать конфиг просто .proxied-claude? как папка или файл? и может продумать команды и флоу для локал сохранения? как есть у claude
+  PROXIED_CLAUDE_PROFILE (env var)  →  1st (explicit per-process override)
+  .proxied-claude-profile (file)    →  2nd (declarative per-project)
+  active_profile (global)           →  3rd (fallback)
+  ```
+
+  **User flow (once per project):**
+  ```bash
+  cd ~/work/myproject
+  claude-proxy profile local set work
+  # ✅ Created .proxied-claude-profile → work
+  #    JetBrains Config directory: ~/.claude-work
+  ```
+  Then in JetBrains: Config directory = `~/.claude-work` (Store in project → saved in `.idea/`).
+  After that — open any number of projects in parallel, each uses its own profile automatically.
+
+  **Behaviour:**
+  - Project has `.proxied-claude-profile` → uses that profile, does NOT update `active_dir`
+    (ephemeral, same as `PROXIED_CLAUDE_PROFILE` — no global side effects)
+  - Project has no `.proxied-claude-profile` → falls back to global `active_profile`
+  - Walk up stops at `/` — no match = fallback to global
+
+  **Files to change:**
+  - `proxied-claude` — extend resolve_profile block: walk up `$PWD` looking for
+    `.proxied-claude-profile`; if found, use it as profile (same guard for `active_dir`
+    safety net as `PROXIED_CLAUDE_PROFILE`)
+  - `claude-proxy` — new subcommand `profile local set <n>` / `local unset` / `local show`:
+    creates/removes `.proxied-claude-profile` in `$PWD`, prints IDE Config directory path
+  - `proxied-claude.bats` — tests for walk up logic: found in current dir, found in
+    parent, not found → fallback, symlink not updated when local profile active
+  - `README.md` — multi-window IDE section with the full flow
+
+  **IDE Config directory for multi-window (no code change needed today):**
+  - `active_dir` symlink → correct for single IDE window, profiles switch with `claude-proxy use`
+  - Direct path `~/.claude-work` per-project in `.idea/` → correct for parallel multi-window;
+    each project configured once via `claude-proxy profile local set`
+
+  **Open questions:**
+  - Should `.proxied-claude-profile` be gitignored by default? (probably yes — it's
+    machine-local, like `.env`; `claude-proxy profile local set` could offer to add it)
+  - File name: `.proxied-claude-profile` vs `.proxied-claude` — latter is shorter but
+    could conflict with a directory name
 
 - [ ] 9. **Failover proxies** — define multiple proxies per profile; `proxied-claude` tries
   them in order if the first is unreachable:
