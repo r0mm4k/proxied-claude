@@ -494,6 +494,7 @@ EOF
           warn "Directory $claude_dir already exists and contains data."
           echo "  Your previous session data and settings are preserved."
           echo ""
+          local _fresh=""
           read -r -p "  Start fresh and delete existing data? [y/N] " _fresh
           if [[ "${_fresh:-}" =~ ^[Yy]$ ]]; then
             rm -rf "$claude_dir"

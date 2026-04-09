@@ -93,6 +93,20 @@ _define_helpers() {
          -print -quit 2>/dev/null | grep -q .
   }
 
+  # Mirrors non-interactive existing-dir branch of profile create
+  # Sets _login_note and prints warn when dir has data; creates dir otherwise.
+  # Returns the resulting _login_note via stdout (last line).
+  do_create_dir_noninteractive() {
+    local claude_dir="$1"
+    local _login_note="Note: you need to log in to Claude the first time you use this profile"
+    if dir_has_data "$claude_dir"; then
+      warn "Directory $claude_dir already exists and contains data — using as-is"
+      _login_note="Note: If your session expired, log in again when you first use this profile"
+    fi
+    mkdir -p "$claude_dir"
+    echo "$_login_note"
+  }
+
   SETTINGS_FILES=("settings.json" "CLAUDE.md" "keybindings.json" "policy-limits.json")
   SETTINGS_DIRS=("hooks" "plugins")
 
@@ -1384,6 +1398,35 @@ EOF
 @test "dir_has_data: nonexistent dir returns false" {
   run dir_has_data "$TEST_DIR/does-not-exist"
   [ "$status" -eq 1 ]
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# profile create — existing dir (non-interactive)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@test "profile create: non-interactive, existing non-empty dir warns" {
+  local dir="$TEST_DIR/claude-work"
+  mkdir -p "$dir"
+  touch "$dir/settings.json"
+  run do_create_dir_noninteractive "$dir"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"already exists"* ]]
+}
+
+@test "profile create: non-interactive, existing non-empty dir gives session-expired note" {
+  local dir="$TEST_DIR/claude-work"
+  mkdir -p "$dir"
+  touch "$dir/settings.json"
+  run do_create_dir_noninteractive "$dir"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"session expired"* ]]
+}
+
+@test "profile create: non-interactive, empty dir gives log-in note" {
+  local dir="$TEST_DIR/claude-work"
+  run do_create_dir_noninteractive "$dir"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"you need to log in"* ]]
 }
 
 @test "proxy create: conf has all required keys" {
