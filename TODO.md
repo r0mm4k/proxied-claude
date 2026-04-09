@@ -157,6 +157,25 @@ Planned improvements for future iterations.
   with no fallback. The old `install.sh` check had a curl fallback. On macOS `nc` is always
   present so this is low-risk, but worth revisiting if Linux support (TODO #23) is added.
 
+- [ ] 24. **`profile create --proxy <n>`** — create profile and link a proxy in one command
+  instead of two separate steps:
+  ```bash
+  claude-proxy profile create work --from default --proxy corp-lt
+  # instead of:
+  # claude-proxy profile create work --from default
+  # claude-proxy profile set-proxy work corp-lt
+  ```
+  Useful in the install wizard too: currently `install.sh` asks about proxy separately after
+  profile creation. With this flag the wizard could pass it directly.
+
+- [ ] 25. **`claude-proxy update` — confirmation + version preview** — currently updates
+  silently without showing what version is being installed or asking for confirmation.
+  Two improvements:
+  - Before downloading: fetch and display the new version number, ask `Upgrade to vX.Y.Z? [y/N]`
+  - `claude-proxy version --check` (or hint in `claude-proxy status`): compare installed
+    version against latest on GitHub and show a hint if an update is available — without
+    blocking or auto-fetching on every run (only on explicit `version` / `status` call)
+
 ---
 
 ## Security
@@ -202,6 +221,3 @@ Planned improvements for future iterations.
 
 - [ ] 23. **Linux support** — replace macOS `security` CLI with a pluggable Keychain backend:
   `secret-tool` (GNOME Keyring), `pass`, or a permissions-restricted file as fallback.
-
-  claude-proxy profile create как будто здесь не хватает параметра сразу и прокси назначить? как думаешь? возможно это будет и полезно при миграции и дефолт?
-  информирование о новое версии? флоу для тех кто не хочет обновляться на v2? подтверждение перед update (возможно всегда нужно?)?
