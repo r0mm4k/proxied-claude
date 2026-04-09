@@ -66,7 +66,7 @@ s  - `proxy.conf` deleted after successful migration (no longer kept as `.migrat
 - **`CONFIG_VERSION=1`** in all conf files — foundation for future migrations
 - **Friendly error messages** for removed v1 commands (`set-all`, `set-host`, `set-user`)
 - **JetBrains and VS Code** integration documented in README
-- **Test suite** — `proxied-claude.bats` (151 tests, requires `bats-core`)
+- **Test suite** — `proxied-claude.bats` (154 tests, requires `bats-core`)
 
 ### Changed
 - **`proxied-claude` is now a thin, fast launcher** (~99 lines) — transparent wrapper,
@@ -102,6 +102,9 @@ s  - `proxy.conf` deleted after successful migration (no longer kept as `.migrat
 ### Fixed
 - **`proxy list` HOST column** — widened from 30 to 38 chars to prevent long
   usernames from running into the "USED BY PROFILES" column
+- **`copy-settings` path rewrite** — after copying `settings.json`, rewrites any
+  `~/.claude` or `~/.claude-<name>` path to the destination profile dir; fixes
+  `statusLine.command` (and any other absolute paths) becoming stale after copying
 
 ### Security
 - **Conf files are no longer sourced as bash** — grep-based parsing eliminates
