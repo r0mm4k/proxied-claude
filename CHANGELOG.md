@@ -49,6 +49,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Batch conflict UX** in `copy-settings`: when destination already has files, shows a
   summary of all conflicts and asks once to confirm; non-interactive with conflicts → `die`
   (replaces per-file warnings)
+- **Existing directory handling in `profile create`** — if `~/.claude-<name>` already
+  exists with data (e.g. after deleting and recreating a profile), warns the user and
+  offers to start fresh `[y/N]`; N (default) keeps existing data with an adjusted login
+  note; Y deletes the directory cleanly; non-interactive silently uses existing data + `warn`
 - **Concurrency lock** — `mkdir`-based POSIX lock (`~/.config/proxied-claude/.lock`)
   prevents race conditions when two terminals run mutating commands simultaneously;
   read-only commands (`list`, `show`, `status`, `check`) skip locking

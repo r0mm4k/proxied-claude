@@ -127,6 +127,10 @@ claude-proxy profile create <n> [--from <source>] [--include-projects]
 # --from <source>: copies settings from <source> profile
 # --include-projects: also copies projects/*/memory/ (project context, not history)
 # Without --from: interactively asks which profile to copy settings from (and whether to include project memory)
+# If ~/.claude-<n> already exists with data: warns and asks whether to start fresh [y/N]
+#   N (default): keeps existing data (login note adjusted accordingly)
+#   Y: deletes existing data and starts clean
+#   Non-interactive: keeps existing data silently + warns
 
 claude-proxy profile delete <n>
 # Deletes profile config (cannot delete 'default' or the active profile)
