@@ -41,7 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Auto-migration from v1** — `install.sh` and `claude-proxy migrate`
   detect and migrate `proxy.conf` automatically:
   - Keychain entry renamed `claude-proxy` → `claude-proxy:default` (old entry removed)
-  - `proxy.conf` → `proxy.conf.migrated` (kept as backup)
+s  - `proxy.conf` deleted after successful migration (no longer kept as `.migrated`)
   - `profiles/default.conf` and `proxies/default.conf` created automatically
 - **`copy-settings`** copies: `settings.json`, `CLAUDE.md`, `keybindings.json`,
   `policy-limits.json`, `hooks/`, `plugins/` — skips auth, history, cache;

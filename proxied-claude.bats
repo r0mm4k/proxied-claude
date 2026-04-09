@@ -926,17 +926,17 @@ PROFILE_PROXY=""
 EOF
   fi
   write_active "default"
-  mv "$legacy" "$legacy.migrated"
+  rm "$legacy"
 }
 
-@test "migration: proxy.conf renamed to .migrated" {
+@test "migration: proxy.conf removed after migration" {
   cat > "$CONF_DIR/proxy.conf" <<'EOF'
 CLAUDE_PROXY_HOST="10.0.0.1:3128"
 CLAUDE_PROXY_USER="john"
 EOF
   _run_migration
   [ ! -f "$CONF_DIR/proxy.conf" ]
-  [ -f "$CONF_DIR/proxy.conf.migrated" ]
+  [ ! -f "$CONF_DIR/proxy.conf.migrated" ]
 }
 
 @test "migration: proxies/default.conf created with host" {

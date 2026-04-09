@@ -364,8 +364,7 @@ EOF
     ok "Active profile set to 'default'"
   fi
 
-  mv "$LEGACY_CONF" "$LEGACY_CONF.migrated"
-  ok "Old config saved as proxy.conf.migrated (safe to delete)"
+  rm "$LEGACY_CONF"
   echo ""
   ok "Migration complete!"
 }
