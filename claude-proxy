@@ -41,6 +41,7 @@ CONF_DIR="$HOME/.config/proxied-claude"
 PROFILES_DIR="$CONF_DIR/profiles"
 PROXIES_DIR="$CONF_DIR/proxies"
 ACTIVE_FILE="$CONF_DIR/active_profile"
+ACTIVE_DIR="$CONF_DIR/active_dir"
 LOCK_DIR="$CONF_DIR/.lock"
 LEGACY_CONF="$CONF_DIR/proxy.conf"
 
@@ -108,11 +109,12 @@ active_profile() {
   fi
 }
 
-# Atomic write — prevents partial reads
+# Atomic write — prevents partial reads. Also updates active_dir symlink for IDE integration.
 write_active() {
   local tmp; tmp="$(mktemp "${ACTIVE_FILE}.XXXXXX")"
   echo "$1" > "$tmp"
   mv "$tmp" "$ACTIVE_FILE"
+  ln -sfn "$(profile_claude_dir "$1")" "$ACTIVE_DIR"
 }
 
 require_profile() {

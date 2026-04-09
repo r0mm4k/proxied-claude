@@ -14,6 +14,7 @@ CONF_DIR="$HOME/.config/proxied-claude"
 PROFILES_DIR="$CONF_DIR/profiles"
 PROXIES_DIR="$CONF_DIR/proxies"
 ACTIVE_FILE="$CONF_DIR/active_profile"
+ACTIVE_DIR="$CONF_DIR/active_dir"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 

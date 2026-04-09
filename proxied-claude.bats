@@ -27,6 +27,7 @@ setup() {
   export PROFILES_DIR="$CONF_DIR/profiles"
   export PROXIES_DIR="$CONF_DIR/proxies"
   export ACTIVE_FILE="$CONF_DIR/active_profile"
+  export ACTIVE_DIR="$CONF_DIR/active_dir"
   export LOCK_DIR="$CONF_DIR/.lock"
   mkdir -p "$PROFILES_DIR" "$PROXIES_DIR"
   _define_helpers
@@ -64,6 +65,7 @@ _define_helpers() {
   write_active() {
     local tmp; tmp="$(mktemp "${ACTIVE_FILE}.XXXXXX")"
     echo "$1" > "$tmp"; mv "$tmp" "$ACTIVE_FILE"
+    ln -sfn "$(profile_claude_dir "$1")" "$ACTIVE_DIR"
   }
 
   # New grep-based read_conf — must match claude-proxy exactly
@@ -178,7 +180,7 @@ _define_helpers() {
           cp -r "$item" "$dst_dir/$d/$(basename "$item")"
           (( dir_copied++ )) || true
         done
-        [[ $dir_copied -gt 0 ]] && { info "Copied $d/"; (( copied++ )) || true; }
+        [[ $dir_copied -gt 0 ]] && { info "Copied $d/ ($dir_copied item(s))"; (( copied++ )) || true; }
       fi
     done
     if [[ "$include_projects" == "1" ]]; then
@@ -195,8 +197,12 @@ _define_helpers() {
       done
       shopt -u nullglob
     fi
-    [[ $copied -eq 0 ]] && info "No settings found in '$src_label'" || \
+    if [[ $copied -eq 0 ]]; then
+      info "No settings found in '$src_label' (nothing copied)"
+    else
       ok "Settings copied from '$src_label' → '$dst_label'"
+      info "Note: you still need to log in to Claude in the new profile"
+    fi
   }
 
   profiles_using_proxy() {
@@ -301,7 +307,7 @@ EOF
     [[ -n "$profile" ]] || return 0
     local proxy; proxy=$(grep -m1 '^PROFILE_PROXY=' "${conf}/profiles/${profile}.conf" 2>/dev/null || true)
     proxy="${proxy#PROFILE_PROXY=}"; proxy="${proxy#\"}"; proxy="${proxy%\"}"
-    [[ -n "$proxy" ]] && printf '%s › %s' "$profile" "$proxy" || printf '%s' "$profile"
+    [[ -n "$proxy" ]] && printf '%s (%s)' "$profile" "$proxy" || printf '%s' "$profile"
   }
 }
 
@@ -419,6 +425,39 @@ EOF
   write_active "work"
   run bash -c "ls '${ACTIVE_FILE}'* 2>/dev/null | wc -l | tr -d ' '"
   [ "$output" = "1" ]
+}
+
+@test "write_active: creates active_dir symlink" {
+  make_profile "work"
+  write_active "work"
+  [ -L "$ACTIVE_DIR" ]
+}
+
+@test "write_active: active_dir points to correct claude dir" {
+  make_profile "work"
+  write_active "work"
+  local expected; expected="$(profile_claude_dir "work")"
+  local actual; actual="$(readlink "$ACTIVE_DIR")"
+  [ "$actual" = "$expected" ]
+}
+
+@test "write_active: active_dir updates when profile switches" {
+  make_profile "work"
+  make_profile "personal"
+  write_active "work"
+  write_active "personal"
+  local actual; actual="$(readlink "$ACTIVE_DIR")"
+  [ "$actual" = "$(profile_claude_dir "personal")" ]
+}
+
+@test "write_active: active_dir differs per profile" {
+  make_profile "work"
+  make_profile "personal"
+  write_active "work"
+  local work_link; work_link="$(readlink "$ACTIVE_DIR")"
+  write_active "personal"
+  local personal_link; personal_link="$(readlink "$ACTIVE_DIR")"
+  [ "$work_link" != "$personal_link" ]
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -597,8 +636,18 @@ EOF
   mkdir -p "$src" "$dst"
   run do_copy_settings "$src" "$dst" "src" "dst"
   [ "$status" -eq 0 ]
+  [[ "$output" == *"nothing copied"* ]]
   run bash -c "ls '$dst' | wc -l | tr -d ' '"
   [ "$output" = "0" ]
+}
+
+@test "copy-settings: shows login note on successful copy" {
+  local src="$TEST_DIR/src" dst="$TEST_DIR/dst"
+  mkdir -p "$src" "$dst"
+  echo '{"theme":"dark"}' > "$src/settings.json"
+  run do_copy_settings "$src" "$dst" "src" "dst"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"log in to Claude"* ]]
 }
 
 @test "copy-settings: dies on conflict in non-interactive mode" {
@@ -1623,14 +1672,14 @@ EOF
   [ "$output" = "personal" ]
 }
 
-@test "statusline _pc_info: profile with proxy → profile › proxy" {
+@test "statusline _pc_info: profile with proxy → profile (proxy)" {
   echo "personal" > "$ACTIVE_FILE"
   mkdir -p "$CONF_DIR/profiles"
-  printf 'CONFIG_VERSION=1\nPROFILE_CLAUDE_DIR="%s"\nPROFILE_PROXY="nigeria"\n' \
+  printf 'CONFIG_VERSION=1\nPROFILE_CLAUDE_DIR="%s"\nPROFILE_PROXY="home-de"\n' \
     "$HOME/.claude-personal" > "$CONF_DIR/profiles/personal.conf"
   run _pc_info
   [ "$status" -eq 0 ]
-  [ "$output" = "personal › nigeria" ]
+  [ "$output" = "personal (home-de)" ]
 }
 
 @test "statusline _pc_info: whitespace in active_profile is stripped" {
@@ -1640,7 +1689,7 @@ EOF
     "$HOME/.claude-work" > "$CONF_DIR/profiles/work.conf"
   run _pc_info
   [ "$status" -eq 0 ]
-  [ "$output" = "work › germany" ]
+  [ "$output" = "work (germany)" ]
 }
 
 @test "statusline _pc_info: missing profile conf → profile name only" {
