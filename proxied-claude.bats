@@ -83,6 +83,11 @@ _define_helpers() {
     fi
   }
 
+  require_profile() {
+    local name="$1"
+    [[ -f "$PROFILES_DIR/${name}.conf" ]] || { echo "ERROR: Profile '$name' does not exist." >&2; return 1; }
+  }
+
   # New grep-based read_conf — must match claude-proxy exactly
   read_conf() {
     local file="$1" var="$2" line
@@ -1499,11 +1504,6 @@ EOF
 # ═══════════════════════════════════════════════════════════════════════════════
 # claude-proxy run (validation logic mirrored)
 # ═══════════════════════════════════════════════════════════════════════════════
-
-require_profile() {
-  local name="$1"
-  [[ -f "$PROFILES_DIR/${name}.conf" ]] || { echo "ERROR: Profile '$name' does not exist." >&2; return 1; }
-}
 
 run_validate() {
   local name="${1:-}"
