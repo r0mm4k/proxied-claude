@@ -69,6 +69,8 @@ die()  { echo "ERROR: $*" >&2; exit 1; }
 ok()   { echo "✅ $*"; }
 info() { echo "   $*"; }
 warn() { echo "⚠️  $*"; }
+# Replaces $HOME with ~ for human-readable display. Never use for IDE paths (~ not expanded by all tools).
+display_path() { echo "${1/#$HOME/\~}"; }
 
 # ── Core helpers ─────────────────────────────────────────────────────────────
 
@@ -440,6 +442,11 @@ Shortcuts:
   claude-proxy update         → update to latest from GitHub
   claude-proxy uninstall      → remove everything
 
+IDE integration (JetBrains / VS Code):
+  Claude command : /usr/local/bin/proxied-claude
+  Config dir     : ~/.config/proxied-claude/active_dir
+  Run 'claude-proxy status' to see current values.
+
 EOF
 }
 
@@ -526,7 +533,7 @@ EOF
       mkdir -p "$claude_dir"
 
       ok "Profile '$name' created"
-      info "Claude dir : $claude_dir"
+      info "Claude dir : $(display_path "$claude_dir")"
       info "$_login_note"
 
       # Copy settings (no lock — only writes into the new profile's dir)
@@ -593,8 +600,8 @@ EOF
       local proxy; proxy="$(read_conf "$PROFILES_DIR/${name}.conf" PROFILE_PROXY)"
       rm "$PROFILES_DIR/${name}.conf"
       ok "Profile '$name' deleted"
-      info "Claude dir kept on disk: $claude_dir"
-      info "To also delete data: rm -rf $claude_dir"
+      info "Claude dir kept on disk: $(display_path "$claude_dir")"
+      info "To also delete data: rm -rf $(display_path "$claude_dir")"
       [[ -n "$proxy" ]] && info "Proxy '$proxy' was linked — it still exists, not deleted"
       lock_release
       ;;
@@ -609,7 +616,7 @@ EOF
       local claude_dir; claude_dir="$(profile_claude_dir "$name")"
       local proxy; proxy="$(read_conf "$PROFILES_DIR/${name}.conf" PROFILE_PROXY)"
       ok "Switched to profile '$name'"
-      info "Claude dir : $claude_dir"
+      info "Claude dir : $(display_path "$claude_dir")"
       info "Proxy      : ${proxy:-(no proxy)}"
       lock_release
       ;;
@@ -630,7 +637,7 @@ EOF
         echo "  Profile        : $target"
         echo "  Active profile : $active"
       fi
-      echo "  Claude dir     : $claude_dir"
+      echo "  Claude dir     : $(display_path "$claude_dir")"
       echo "  Proxy          : ${proxy:-(no proxy)}"
       if [[ -n "$proxy" ]]; then
         local pconf="$PROXIES_DIR/${proxy}.conf"
@@ -1047,7 +1054,7 @@ case "$cmd" in
     echo ""
     echo "  ── Active profile ─────────────────────────────"
     echo "  Profile    : $_st_active"
-    echo "  Claude dir : $_st_dir"
+    echo "  Claude dir : $(display_path "$_st_dir")"
     echo "  Proxy      : ${_st_proxy:-(no proxy)}"
     if [[ -n "$_st_proxy" ]]; then
       _st_pconf="$PROXIES_DIR/${_st_proxy}.conf"
@@ -1088,6 +1095,9 @@ case "$cmd" in
         printf "  %-20s  %s@%s\n" "$_st_n" "${_st_u:-?}" "${_st_h:-?}"
       done
     fi
+    echo "  ── IDE integration ────────────────────────────"
+    echo "  Command    : $WRAPPER_PATH"
+    echo "  Config dir : $CONF_DIR/active_dir"
     echo ""
     ;;
 

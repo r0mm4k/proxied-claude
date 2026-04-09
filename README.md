@@ -323,8 +323,12 @@ claude-proxy profile set-proxy default corp-lt
    ```
    /usr/local/bin/proxied-claude
    ```
+3. **Settings → Tools → Claude Code [Beta]** → Config directory:
+   ```
+   ~/.config/proxied-claude/active_dir
+   ```
 
-The wrapper always uses the currently active profile. Switch with `claude-proxy use <n>` — takes effect on the next IDE session.
+The config dir symlink always points to the active profile's Claude dir — updates automatically when you switch profiles with `claude-proxy use <n>`.
 
 ### VS Code
 

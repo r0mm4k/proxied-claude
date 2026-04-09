@@ -6,11 +6,12 @@ Planned improvements for future iterations.
 
 ## Features
 
-- [ ] 1. **`PROXIED_CLAUDE_PROFILE` env var override** — run with a specific profile without
+- [x] 1. **`PROXIED_CLAUDE_PROFILE` env var override** — run with a specific profile without
   changing global `active_profile`. Useful for multiple terminals or aliases:
   ```bash
   PROXIED_CLAUDE_PROFILE=work proxied-claude
   alias claude-work="PROXIED_CLAUDE_PROFILE=work proxied-claude"
+  # or via: claude-proxy run work
   ```
 
 - [x] 2. **`copy-settings --include-projects`** — optional flag to also copy the `projects/`
@@ -44,6 +45,8 @@ Planned improvements for future iterations.
 - [ ] 4. **`claude-proxy check [<proxy>]`** — make the proxy name argument optional.
   Currently `claude-proxy check` (no args) works; `claude-proxy check corp-lt` falls
   through to unknown command. Should be a shortcut for `claude-proxy proxy check corp-lt`.
+  
+  А нужно ли это?
 
 - [ ] 5. **`claude-proxy backup` / `restore`** — export all config to a tarball for machine
   migration. Includes `profiles/`, `proxies/`, `active_profile`. Never includes Keychain
@@ -71,6 +74,8 @@ Planned improvements for future iterations.
   echo "work" > ~/work/myproject/.proxied-claude-profile
   # proxied-claude in that dir picks up 'work' profile automatically
   ```
+  А когда после авто идешь в репозиторий который без .proxied-claude-profile, что будет?
+  И может назвать конфиг просто .proxied-claude? как папка или файл? и может продумать команды и флоу для локал сохранения? как есть у claude
 
 - [ ] 9. **Failover proxies** — define multiple proxies per profile; `proxied-claude` tries
   them in order if the first is unreachable:
@@ -93,7 +98,7 @@ Planned improvements for future iterations.
 
 - [x] 13. **Active profile display in Claude Code statusline** — `_pc_info()` shell
   helper reads `active_profile` + `profiles/<n>.conf` directly (no subprocess).
-  Outputs `profile › proxy` (or just `profile`, or nothing). Ships as an optional
+  Outputs `profile (proxy)` (or just `profile`, or nothing). Ships as an optional
   snippet in README under "Claude Code statusline integration".
 
 - [ ] 14. **`claude-proxy proxy check --watch`** — periodic proxy health monitoring,
@@ -107,6 +112,26 @@ Planned improvements for future iterations.
   claude-proxy proxy set-host corp-lt 10.0.0.2:3128
   claude-proxy proxy set-user corp-lt john.doe
   ```
+
+- [ ] 22. **`copy-settings` — path rewrite for custom `PROFILE_CLAUDE_DIR`** — the sed rewrite
+  in `do_copy_settings` only matches `~/.claude` and `~/.claude-<name>` patterns. If a user
+  set `PROFILE_CLAUDE_DIR` to a custom path (e.g. `/Volumes/Work/.claude-work`), paths in
+  `settings.json` would not be rewritten. Needs passing `src_dir` into sed instead of
+  relying on the fixed `~/.claude*` pattern.
+
+- [ ] 23. **`proxy check` — `nc` without curl fallback** — `cmd_proxy check` uses `nc -z -w 5`
+  with no fallback. The old `install.sh` check had a curl fallback. On macOS `nc` is always
+  present so this is low-risk, but worth revisiting if Linux support (TODO #21) is added.
+
+---
+
+## Security
+
+- [ ] 24. **`install.sh` — checksum verification** — the installer downloads binaries via
+  `curl --proto '=https' --tlsv1.2` but does not verify content hashes. For a tool that
+  stores credentials, a `sha256sum` check against a published `SHA256SUMS` file would
+  materially raise the supply-chain security bar. Depends on: #20 (GitHub Releases, where
+  checksums can be published as release assets).
 
 ---
 
@@ -143,3 +168,5 @@ Planned improvements for future iterations.
 
 - [ ] 21. **Linux support** — replace macOS `security` CLI with a pluggable Keychain backend:
   `secret-tool` (GNOME Keyring), `pass`, or a permissions-restricted file as fallback.
+
+  claude-proxy profile create как будто здесь не хватает параметра сразу и прокси назначить? как думаешь? возможно это будет и полезно при миграции и дефолт?
