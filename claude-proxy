@@ -218,6 +218,10 @@ do_copy_settings() {
       (( copied++ )) || true
     fi
   done
+  # Rewrite claude profile dir paths in settings.json
+  [[ -f "$dst_dir/settings.json" ]] && \
+    sed -E -i '' "s|$HOME/\.claude(-[a-zA-Z0-9_-]*)?|$dst_dir|g" \
+      "$dst_dir/settings.json"
   for d in "${SETTINGS_DIRS[@]}"; do
     if [[ -d "$src_dir/$d" ]]; then
       mkdir -p "$dst_dir/$d"

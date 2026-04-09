@@ -165,6 +165,10 @@ _define_helpers() {
         (( copied++ )) || true
       fi
     done
+    # Rewrite claude profile dir paths in settings.json
+    [[ -f "$dst_dir/settings.json" ]] && \
+      sed -E -i '' "s|$HOME/\.claude(-[a-zA-Z0-9_-]*)?|$dst_dir|g" \
+        "$dst_dir/settings.json"
     for d in "${SETTINGS_DIRS[@]}"; do
       if [[ -d "$src_dir/$d" ]]; then
         mkdir -p "$dst_dir/$d"
@@ -615,6 +619,35 @@ EOF
   run _run_ni do_copy_settings "$src" "$dst" "src" "dst"
   run cat "$dst/settings.json"
   [ "$output" = '{"theme":"light"}' ]
+}
+
+@test "copy-settings: rewrites ~/.claude path in settings.json to dst_dir" {
+  local src="$TEST_DIR/src" dst="$TEST_DIR/dst"
+  mkdir -p "$src" "$dst"
+  printf '{"statusLine":{"command":"bash %s/hooks/statusline.sh"}}' \
+    "$HOME/.claude" > "$src/settings.json"
+  do_copy_settings "$src" "$dst" "src" "dst"
+  run cat "$dst/settings.json"
+  [[ "$output" == *"${dst}/hooks/statusline.sh"* ]]
+}
+
+@test "copy-settings: rewrites ~/.claude-name path in settings.json to dst_dir" {
+  local src="$TEST_DIR/src" dst="$TEST_DIR/dst"
+  mkdir -p "$src" "$dst"
+  printf '{"statusLine":{"command":"bash %s/hooks/statusline.sh"}}' \
+    "$HOME/.claude-personal" > "$src/settings.json"
+  do_copy_settings "$src" "$dst" "src" "dst"
+  run cat "$dst/settings.json"
+  [[ "$output" == *"${dst}/hooks/statusline.sh"* ]]
+}
+
+@test "copy-settings: settings.json without profile paths is copied unchanged" {
+  local src="$TEST_DIR/src" dst="$TEST_DIR/dst"
+  mkdir -p "$src" "$dst"
+  echo '{"theme":"dark"}' > "$src/settings.json"
+  do_copy_settings "$src" "$dst" "src" "dst"
+  run cat "$dst/settings.json"
+  [ "$output" = '{"theme":"dark"}' ]
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
