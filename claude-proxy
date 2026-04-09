@@ -318,7 +318,7 @@ do_migrate() {
     local pass
     pass="$(security find-generic-password -a "$old_user" -s "$old_svc" -w 2>/dev/null || true)"
     if [[ -n "$pass" ]]; then
-      security add-generic-password -a "$old_user" -s "$new_svc" -w "$pass" -U 2>/dev/null || true
+      security add-generic-password -a "$old_user" -s "$new_svc" -w "$pass" -U >/dev/null 2>&1 || true
       security delete-generic-password -a "$old_user" -s "$old_svc" >/dev/null 2>&1 || true
       ok "Proxy password migrated → Keychain: $new_svc"
       ok "Old Keychain entry '$old_svc' removed"
@@ -967,7 +967,7 @@ EOF
       local pass
       pass="$(security find-generic-password -a "$puser" -s "$old_svc" -w 2>/dev/null || true)"
       if [[ -n "$pass" ]]; then
-        security add-generic-password -a "$puser" -s "$new_svc" -w "$pass" -U 2>/dev/null || true
+        security add-generic-password -a "$puser" -s "$new_svc" -w "$pass" -U >/dev/null 2>&1 || true
         security delete-generic-password -a "$puser" -s "$old_svc" >/dev/null 2>&1 || true
         info "Keychain entry renamed: $old_svc → $new_svc"
       else
