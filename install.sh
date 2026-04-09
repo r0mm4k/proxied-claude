@@ -19,7 +19,7 @@ VERSION="2.0.0"
 WRAPPER_PATH="/usr/local/bin/proxied-claude"
 CTL_PATH="/usr/local/bin/claude-proxy"
 CONF_DIR="$HOME/.config/proxied-claude"
-REPO_RAW="https://raw.githubusercontent.com/r0mm4k/proxied-claude/main"
+REPO_RAW="${REPO_RAW:-https://raw.githubusercontent.com/r0mm4k/proxied-claude/main}"
 IS_UPGRADE="${PROXIED_CLAUDE_UPGRADE:-0}"
 
 die()  { echo "ERROR: $*" >&2; exit 1; }
