@@ -42,15 +42,15 @@ Planned improvements for future iterations.
   - **Y**: `rm -rf ~/.claude-work && mkdir`, show normal login note
   - Non-interactive (`-t 0` false): silently use existing dir + `warn` (no prompt)
 
-- [ ] 5. **`claude-proxy backup` / `restore`** — export all config to a tarball for machine
+- [ ] 4. **`claude-proxy backup` / `restore`** — export all config to a tarball for machine
   migration. Includes `profiles/`, `proxies/`, `active_profile`. Never includes Keychain
   passwords — user re-enters them via `claude-proxy proxy set-password <n>` after restore.
 
-- [ ] 6. **`claude-proxy doctor`** — diagnose the full system in one command: binaries,
+- [ ] 5. **`claude-proxy doctor`** — diagnose the full system in one command: binaries,
   `__CLAUDE_BIN__` patch, config dir, profile dirs, proxy confs, Keychain entries,
   active profile validity.
 
-- [ ] 7. **`claude-proxy update --version <n>`** — pin to a specific release instead of
+- [ ] 6. **`claude-proxy update --version <n>`** — pin to a specific release instead of
   always pulling `main`. Two-part change:
   - `install.sh`: respect `VERSION` env var to set `REPO_RAW` to a tagged ref instead of `main`
   - `claude-proxy update --version <n>`: pass `VERSION=<n>` when invoking `install.sh`
@@ -59,9 +59,9 @@ Planned improvements for future iterations.
   # or via install.sh directly:
   VERSION=2.1.0 bash <(curl -fsSL .../install.sh)
   ```
-  Depends on: #20 (GitHub Releases).
+  Depends on: #22 (GitHub Releases).
 
-- [ ] 8. **Directory-based auto-switch** — `proxied-claude` automatically picks the right
+- [ ] 7. **Directory-based auto-switch** — `proxied-claude` automatically picks the right
   profile based on a `.proxied-claude-profile` file in the project root (or any parent
   directory, walking up like `git` searches for `.git`). This is the correct solution
   for **parallel multi-window IDE** use: each project declares its profile once, both
@@ -111,34 +111,34 @@ Planned improvements for future iterations.
   - File name: `.proxied-claude-profile` vs `.proxied-claude` — latter is shorter but
     could conflict with a directory name
 
-- [ ] 9. **Failover proxies** — define multiple proxies per profile; `proxied-claude` tries
+- [ ] 8. **Failover proxies** — define multiple proxies per profile; `proxied-claude` tries
   them in order if the first is unreachable:
   ```
   PROFILE_PROXIES="corp-lt corp-backup"
   ```
 
-- [ ] 10. **`claude-proxy proxy create --check`** — immediately run `proxy check` after
+- [ ] 9. **`claude-proxy proxy create --check`** — immediately run `proxy check` after
   creating a proxy to verify it works, without a separate command.
 
-- [ ] 11. **`claude-proxy profile set-description <profile> <text>`** — store a
+- [ ] 10. **`claude-proxy profile set-description <profile> <text>`** — store a
   human-readable note in the profile conf, shown in `list` and `status`:
   ```
   work     corp-lt   Work Team account  ◀ active
   personal (none)    Personal Pro
   ```
 
-- [ ] 12. **`--json` output** — machine-readable output for `status`, `profile list`,
+- [ ] 11. **`--json` output** — machine-readable output for `status`, `profile list`,
   `proxy list`. Useful for scripting and IDE integrations.
 
-- [x] 13. **Active profile display in Claude Code statusline** — `_pc_info()` shell
+- [x] 12. **Active profile display in Claude Code statusline** — `_pc_info()` shell
   helper reads `active_profile` + `profiles/<n>.conf` directly (no subprocess).
   Outputs `profile (proxy)` (or just `profile`, or nothing). Ships as an optional
   snippet in README under "Claude Code statusline integration".
 
-- [ ] 14. **`claude-proxy proxy check --watch`** — periodic proxy health monitoring,
+- [ ] 13. **`claude-proxy proxy check --watch`** — periodic proxy health monitoring,
   re-checking at a given interval until interrupted.
 
-- [ ] 15. **`claude-proxy proxy set-host` / `proxy set-user`** — change host or user of an
+- [ ] 14. **`claude-proxy proxy set-host` / `proxy set-user`** — change host or user of an
   existing proxy without deleting and recreating it (which requires re-entering the password).
   v1 had top-level `set-host` / `set-user`; v2 removed them but never added the equivalent
   under `proxy`:
@@ -147,36 +147,36 @@ Planned improvements for future iterations.
   claude-proxy proxy set-user corp-lt john.doe
   ```
 
-- [ ] 22. **`copy-settings` — path rewrite for custom `PROFILE_CLAUDE_DIR`** — the sed rewrite
+- [ ] 15. **`copy-settings` — path rewrite for custom `PROFILE_CLAUDE_DIR`** — the sed rewrite
   in `do_copy_settings` only matches `~/.claude` and `~/.claude-<name>` patterns. If a user
   set `PROFILE_CLAUDE_DIR` to a custom path (e.g. `/Volumes/Work/.claude-work`), paths in
   `settings.json` would not be rewritten. Needs passing `src_dir` into sed instead of
   relying on the fixed `~/.claude*` pattern.
 
-- [ ] 23. **`proxy check` — `nc` without curl fallback** — `cmd_proxy check` uses `nc -z -w 5`
+- [ ] 16. **`proxy check` — `nc` without curl fallback** — `cmd_proxy check` uses `nc -z -w 5`
   with no fallback. The old `install.sh` check had a curl fallback. On macOS `nc` is always
-  present so this is low-risk, but worth revisiting if Linux support (TODO #21) is added.
+  present so this is low-risk, but worth revisiting if Linux support (TODO #23) is added.
 
 ---
 
 ## Security
 
-- [ ] 24. **`install.sh` — checksum verification** — the installer downloads binaries via
+- [ ] 17. **`install.sh` — checksum verification** — the installer downloads binaries via
   `curl --proto '=https' --tlsv1.2` but does not verify content hashes. For a tool that
   stores credentials, a `sha256sum` check against a published `SHA256SUMS` file would
-  materially raise the supply-chain security bar. Depends on: #20 (GitHub Releases, where
+  materially raise the supply-chain security bar. Depends on: #22 (GitHub Releases, where
   checksums can be published as release assets).
 
 ---
 
 ## CI / DX
 
-- [ ] 16. **GitHub Actions** — auto-run `bats proxied-claude.bats` on push and pull requests.
+- [ ] 18. **GitHub Actions** — auto-run `bats proxied-claude.bats` on push and pull requests.
 
-- [ ] 17. **Shell completions (zsh / bash)** — tab-complete subcommands, profile names,
+- [ ] 19. **Shell completions (zsh / bash)** — tab-complete subcommands, profile names,
   and proxy names.
 
-- [ ] 18. **Split test suite into `tests/`** — move `proxied-claude.bats` into a `tests/`
+- [ ] 20. **Split test suite into `tests/`** — move `proxied-claude.bats` into a `tests/`
   directory and split by domain as the suite grows:
   ```
   tests/
@@ -188,19 +188,19 @@ Planned improvements for future iterations.
   ```
   Update `bats` invocation in README and GitHub Actions accordingly.
 
-- [ ] 19. **Shellcheck linting in CI** — add a shellcheck step to GitHub Actions alongside
+- [ ] 21. **Shellcheck linting in CI** — add a shellcheck step to GitHub Actions alongside
   the bats tests. Catches common shell pitfalls (quoting, word splitting, deprecated syntax)
   across `proxied-claude`, `claude-proxy`, and `install.sh`.
 
-- [ ] 20. **GitHub Releases with version tags** — publish tagged releases (`v2.0.0`, `v2.1.0`)
-  so the `update` command can pin to a specific version (TODO #7) and users can audit what
+- [ ] 22. **GitHub Releases with version tags** — publish tagged releases (`v2.0.0`, `v2.1.0`)
+  so the `update` command can pin to a specific version (TODO #6) and users can audit what
   they're installing.
 
 ---
 
 ## Platform
 
-- [ ] 21. **Linux support** — replace macOS `security` CLI with a pluggable Keychain backend:
+- [ ] 23. **Linux support** — replace macOS `security` CLI with a pluggable Keychain backend:
   `secret-tool` (GNOME Keyring), `pass`, or a permissions-restricted file as fallback.
 
   claude-proxy profile create как будто здесь не хватает параметра сразу и прокси назначить? как думаешь? возможно это будет и полезно при миграции и дефолт?
