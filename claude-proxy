@@ -559,16 +559,13 @@ EOF
 
       # Auto-activate (lock → write_active → release)
       if [[ -t 0 ]]; then
-        local active; active="$(active_profile)"
-        if [[ "$active" == "default" ]]; then
-          echo ""
-          read -r -p "  Set '$name' as active profile now? [Y/n] " _activate
-          if [[ ! "${_activate:-}" =~ ^[Nn]$ ]]; then
-            lock_acquire
-            write_active "$name"
-            lock_release
-            ok "Active profile → '$name'"
-          fi
+        echo ""
+        read -r -p "  Set '$name' as active profile now? [Y/n] " _activate
+        if [[ ! "${_activate:-}" =~ ^[Nn]$ ]]; then
+          lock_acquire
+          write_active "$name"
+          lock_release
+          ok "Active profile → '$name'"
         fi
       fi
       ;;
