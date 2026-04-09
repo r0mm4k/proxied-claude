@@ -96,7 +96,7 @@ s  - `proxy.conf` deleted after successful migration (no longer kept as `.migrat
 
 ### Documentation
 - **Claude Code statusline integration** — optional `_pc_info()` snippet in README;
-  prepends `profile › proxy` (or just `profile`) to the statusline hook output;
+  prepends `profile (proxy)` (or just `profile`) to the statusline hook output;
   silent no-op when proxied-claude is not installed
 
 ### Fixed
