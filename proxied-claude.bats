@@ -1563,18 +1563,17 @@ EOF
   [ "$status" -eq 0 ]
 }
 
+# ═══════════════════════════════════════════════════════════════════════════════
 # statusline
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @test "statusline _pc_info: no active_profile → empty output" {
-  _define_helpers
   run _pc_info
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
 
 @test "statusline _pc_info: empty active_profile → empty output" {
-  _define_helpers
   echo "" > "$ACTIVE_FILE"
   run _pc_info
   [ "$status" -eq 0 ]
@@ -1582,7 +1581,6 @@ EOF
 }
 
 @test "statusline _pc_info: profile with no proxy → profile name only" {
-  _define_helpers
   echo "personal" > "$ACTIVE_FILE"
   mkdir -p "$CONF_DIR/profiles"
   printf 'CONFIG_VERSION=1\nPROFILE_CLAUDE_DIR="%s"\nPROFILE_PROXY=""\n' \
@@ -1593,7 +1591,6 @@ EOF
 }
 
 @test "statusline _pc_info: profile with proxy → profile › proxy" {
-  _define_helpers
   echo "personal" > "$ACTIVE_FILE"
   mkdir -p "$CONF_DIR/profiles"
   printf 'CONFIG_VERSION=1\nPROFILE_CLAUDE_DIR="%s"\nPROFILE_PROXY="nigeria"\n' \
@@ -1604,7 +1601,6 @@ EOF
 }
 
 @test "statusline _pc_info: whitespace in active_profile is stripped" {
-  _define_helpers
   printf '  work  \n' > "$ACTIVE_FILE"
   mkdir -p "$CONF_DIR/profiles"
   printf 'CONFIG_VERSION=1\nPROFILE_CLAUDE_DIR="%s"\nPROFILE_PROXY="germany"\n' \
@@ -1612,4 +1608,11 @@ EOF
   run _pc_info
   [ "$status" -eq 0 ]
   [ "$output" = "work › germany" ]
+}
+
+@test "statusline _pc_info: missing profile conf → profile name only" {
+  echo "orphan" > "$ACTIVE_FILE"
+  run _pc_info
+  [ "$status" -eq 0 ]
+  [ "$output" = "orphan" ]
 }
