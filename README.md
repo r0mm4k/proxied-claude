@@ -337,6 +337,46 @@ Add to your `settings.json`:
 
 ---
 
+## Claude Code statusline integration
+
+If you use a custom `statusline.sh` hook, you can prepend the active profile and proxy
+to the status line:
+
+```
+personal › nigeria | ctx:30% | ▲13 ▼5 | $1.22 | 5h:15% ~4h 7d:65% ~2d
+```
+
+Add to your `~/.claude-<profile>/hooks/statusline.sh`, near the top after color declarations:
+
+```bash
+CYAN=$'\033[36m'
+
+_pc_info() {
+  local conf="${HOME}/.config/proxied-claude"
+  [[ -f "${conf}/active_profile" ]] || return 0
+  local profile; profile=$(tr -d '[:space:]' < "${conf}/active_profile")
+  [[ -n "$profile" ]] || return 0
+  local proxy; proxy=$(grep -m1 '^PROFILE_PROXY=' "${conf}/profiles/${profile}.conf" 2>/dev/null || true)
+  proxy="${proxy#PROFILE_PROXY=}"; proxy="${proxy#\"}"; proxy="${proxy%\"}"
+  [[ -n "$proxy" ]] && printf '%s' "${CYAN}${profile}${R} ${DIM}›${R} ${proxy}" \
+                    || printf '%s' "${CYAN}${profile}${R}"
+}
+
+PC_INFO=$(_pc_info)
+[[ -n "$PC_INFO" ]] && PREFIX="${PC_INFO} ${DIM}|${R} " || PREFIX=""
+```
+
+Then prepend `${PREFIX}` to the main `printf` in your script:
+
+```bash
+printf '%s' "${PREFIX}ctx:..."
+```
+
+If proxied-claude is not installed, or no profile is active, `PREFIX` is empty and the
+statusline is unchanged.
+
+---
+
 ## What gets copied with `copy-settings`
 
 | Item | Type | Copied | Notes |
