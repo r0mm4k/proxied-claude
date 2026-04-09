@@ -86,6 +86,10 @@ _define_helpers() {
     fi
   }
 
+  # Runs a function with stdin closed — forces [[ -t 0 ]] to return false.
+  # Use for tests that exercise non-interactive code paths.
+  _run_ni() { "$@" < /dev/null; }
+
   dir_has_data() {
     local dir="$1"
     [[ -d "$dir" ]] || return 1
@@ -588,7 +592,7 @@ EOF
   mkdir -p "$src" "$dst"
   echo '{"theme":"dark"}' > "$src/settings.json"
   echo '{"theme":"light"}' > "$dst/settings.json"
-  run do_copy_settings "$src" "$dst" "src" "dst"
+  run _run_ni do_copy_settings "$src" "$dst" "src" "dst"
   [ "$status" -ne 0 ]
   [[ "$output" == *"conflicting"* ]]
 }
@@ -598,7 +602,7 @@ EOF
   mkdir -p "$src" "$dst"
   echo '{"theme":"dark"}' > "$src/settings.json"
   echo '{"theme":"light"}' > "$dst/settings.json"
-  run do_copy_settings "$src" "$dst" "src" "dst"
+  run _run_ni do_copy_settings "$src" "$dst" "src" "dst"
   run cat "$dst/settings.json"
   [ "$output" = '{"theme":"light"}' ]
 }
@@ -697,7 +701,7 @@ EOF
   mkdir -p "$src/projects/my-repo/memory" "$dst/projects/my-repo/memory"
   echo "# src" > "$src/projects/my-repo/memory/MEMORY.md"
   echo "# dst" > "$dst/projects/my-repo/memory/MEMORY.md"
-  run do_copy_settings "$src" "$dst" "src" "dst" 1
+  run _run_ni do_copy_settings "$src" "$dst" "src" "dst" 1
   [ "$status" -ne 0 ]
   [[ "$output" == *"conflicting"* ]]
 }
