@@ -47,11 +47,17 @@ read_conf() {
 }
 
 # ── Resolve active profile ───────────────────────────────────────────────────
+# PROXIED_CLAUDE_PROFILE overrides global active_profile for this session only.
+# Does not change active_profile file — other terminals and IDE are unaffected.
 
-if [[ -f "$ACTIVE_FILE" && -s "$ACTIVE_FILE" ]]; then
-  PROFILE="$(tr -d '[:space:]' < "$ACTIVE_FILE")"
+if [[ -n "${PROXIED_CLAUDE_PROFILE:-}" ]]; then
+  PROFILE="${PROXIED_CLAUDE_PROFILE}"
+else
+  if [[ -f "$ACTIVE_FILE" && -s "$ACTIVE_FILE" ]]; then
+    PROFILE="$(tr -d '[:space:]' < "$ACTIVE_FILE")"
+  fi
+  PROFILE="${PROFILE:-default}"
 fi
-PROFILE="${PROFILE:-default}"
 
 PROFILE_CONF="$PROFILES_DIR/${PROFILE}.conf"
 [[ -f "$PROFILE_CONF" ]] || die "Profile '$PROFILE' not found.
@@ -69,6 +75,14 @@ fi
 
 mkdir -p "$CLAUDE_DIR"
 export CLAUDE_CONFIG_DIR="$CLAUDE_DIR"
+
+# ── Update active_dir symlink (IDE integration) ──────────────────────────────
+# Safety net: sync symlink with global active_profile.
+# Skipped when PROXIED_CLAUDE_PROFILE override is active — override sessions
+# are ephemeral and must not displace the global active_dir pointer.
+if [[ -z "${PROXIED_CLAUDE_PROFILE:-}" ]]; then
+  ln -sfn "$CLAUDE_DIR" "$ACTIVE_DIR"
+fi
 
 # ── Apply proxy if linked ────────────────────────────────────────────────────
 

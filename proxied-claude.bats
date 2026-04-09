@@ -68,6 +68,21 @@ _define_helpers() {
     ln -sfn "$(profile_claude_dir "$1")" "$ACTIVE_DIR"
   }
 
+  # Mirrors profile resolution logic from proxied-claude
+  resolve_profile() {
+    local override="${PROXIED_CLAUDE_PROFILE:-}"
+    if [[ -n "$override" ]]; then
+      echo "$override"
+    else
+      if [[ -f "$ACTIVE_FILE" && -s "$ACTIVE_FILE" ]]; then
+        local val; val="$(tr -d '[:space:]' < "$ACTIVE_FILE")"
+        [[ -n "$val" ]] && echo "$val" || echo "default"
+      else
+        echo "default"
+      fi
+    fi
+  }
+
   # New grep-based read_conf — must match claude-proxy exactly
   read_conf() {
     local file="$1" var="$2" line
@@ -1407,6 +1422,12 @@ EOF
   [[ "$output" != *"print_help"* ]]
 }
 
+@test "architecture: wrapper reads PROXIED_CLAUDE_PROFILE" {
+  local count
+  count="$(grep -c "PROXIED_CLAUDE_PROFILE" "$(dirname "$BATS_TEST_FILENAME")/proxied-claude" 2>/dev/null; true)"
+  [ "${count:-0}" -ge 2 ]
+}
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # profile use
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1425,6 +1446,42 @@ EOF
   write_active "work"
   run bash -c "ls '${ACTIVE_FILE}'* 2>/dev/null | wc -l | tr -d ' '"
   [ "$output" = "1" ]
+}
+
+@test "profile use: active_dir updated after use" {
+  make_profile "work"
+  make_profile "personal"
+  write_active "work"
+  write_active "personal"
+  local actual; actual="$(readlink "$ACTIVE_DIR")"
+  [ "$actual" = "$(profile_claude_dir "personal")" ]
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PROXIED_CLAUDE_PROFILE override
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@test "profile override: uses PROXIED_CLAUDE_PROFILE when set" {
+  write_active "personal"
+  PROXIED_CLAUDE_PROFILE="work" run resolve_profile
+  [ "$output" = "work" ]
+}
+
+@test "profile override: falls back to active_profile when override empty" {
+  write_active "personal"
+  PROXIED_CLAUDE_PROFILE="" run resolve_profile
+  [ "$output" = "personal" ]
+}
+
+@test "profile override: falls back to active_profile when override unset" {
+  write_active "personal"
+  run resolve_profile
+  [ "$output" = "personal" ]
+}
+
+@test "profile override: falls back to default when no active_profile and no override" {
+  run resolve_profile
+  [ "$output" = "default" ]
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
