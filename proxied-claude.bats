@@ -905,24 +905,36 @@ _run_migration() {
   local old_host; old_host="$(read_conf "$legacy" CLAUDE_PROXY_HOST)"
   local old_user; old_user="$(read_conf "$legacy" CLAUDE_PROXY_USER)"
 
+  local has_proxy=false
   if [[ -n "$old_host" && -n "$old_user" ]]; then
+    has_proxy=true
     cat > "$PROXIES_DIR/default.conf" <<EOF
 CONFIG_VERSION=1
 PROXY_HOST="${old_host}"
 PROXY_USER="${old_user}"
 PROXY_KEYCHAIN_SERVICE="claude-proxy:default"
 EOF
+  fi
+
+  if [[ ! -f "$PROFILES_DIR/default.conf" ]]; then
+    local linked=""; [[ "$has_proxy" == "true" ]] && linked="default"
     cat > "$PROFILES_DIR/default.conf" <<EOF
 CONFIG_VERSION=1
 PROFILE_CLAUDE_DIR="$HOME/.claude"
-PROFILE_PROXY="default"
+PROFILE_PROXY="${linked}"
 EOF
   else
-    cat > "$PROFILES_DIR/default.conf" <<EOF
+    if [[ "$has_proxy" == "true" ]]; then
+      local _cur_proxy; _cur_proxy="$(read_conf "$PROFILES_DIR/default.conf" PROFILE_PROXY)"
+      if [[ -z "$_cur_proxy" ]]; then
+        local _cur_dir; _cur_dir="$(read_conf "$PROFILES_DIR/default.conf" PROFILE_CLAUDE_DIR)"
+        cat > "$PROFILES_DIR/default.conf" <<EOF
 CONFIG_VERSION=1
-PROFILE_CLAUDE_DIR="$HOME/.claude"
-PROFILE_PROXY=""
+PROFILE_CLAUDE_DIR="${_cur_dir}"
+PROFILE_PROXY="default"
 EOF
+      fi
+    fi
   fi
   write_active "default"
   rm "$legacy"
@@ -986,6 +998,36 @@ EOF
   _run_migration
   run read_conf "$PROFILES_DIR/default.conf" PROFILE_PROXY
   [ "$output" = "default" ]
+}
+
+@test "migration: existing profiles/default.conf gets proxy linked when empty" {
+  cat > "$CONF_DIR/proxy.conf" <<'EOF'
+CLAUDE_PROXY_HOST="10.0.0.1:3128"
+CLAUDE_PROXY_USER="john"
+EOF
+  cat > "$PROFILES_DIR/default.conf" <<EOF
+CONFIG_VERSION=1
+PROFILE_CLAUDE_DIR="$HOME/.claude"
+PROFILE_PROXY=""
+EOF
+  _run_migration
+  run read_conf "$PROFILES_DIR/default.conf" PROFILE_PROXY
+  [ "$output" = "default" ]
+}
+
+@test "migration: existing profiles/default.conf keeps proxy if already set" {
+  cat > "$CONF_DIR/proxy.conf" <<'EOF'
+CLAUDE_PROXY_HOST="10.0.0.1:3128"
+CLAUDE_PROXY_USER="john"
+EOF
+  cat > "$PROFILES_DIR/default.conf" <<EOF
+CONFIG_VERSION=1
+PROFILE_CLAUDE_DIR="$HOME/.claude"
+PROFILE_PROXY="my-existing-proxy"
+EOF
+  _run_migration
+  run read_conf "$PROFILES_DIR/default.conf" PROFILE_PROXY
+  [ "$output" = "my-existing-proxy" ]
 }
 
 @test "migration: active_profile set to default" {

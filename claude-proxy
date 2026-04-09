@@ -351,7 +351,22 @@ EOF
     ok "Created profiles/default.conf → $HOME/.claude"
     [[ "$has_proxy" == "true" ]] && info "Proxy 'default' linked"
   else
-    info "profiles/default.conf already exists — skipped"
+    if [[ "$has_proxy" == "true" ]]; then
+      local _cur_proxy; _cur_proxy="$(read_conf "$PROFILES_DIR/default.conf" PROFILE_PROXY)"
+      if [[ -z "$_cur_proxy" ]]; then
+        local _cur_dir; _cur_dir="$(read_conf "$PROFILES_DIR/default.conf" PROFILE_CLAUDE_DIR)"
+        cat > "$PROFILES_DIR/default.conf" <<EOF
+CONFIG_VERSION=1
+PROFILE_CLAUDE_DIR="${_cur_dir}"
+PROFILE_PROXY="default"
+EOF
+        ok "Linked proxy 'default' to existing profiles/default.conf"
+      else
+        info "profiles/default.conf already exists — skipped"
+      fi
+    else
+      info "profiles/default.conf already exists — skipped"
+    fi
   fi
 
   if [[ ! -f "$ACTIVE_FILE" || ! -s "$ACTIVE_FILE" ]]; then
