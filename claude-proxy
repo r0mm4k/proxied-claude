@@ -319,7 +319,7 @@ do_migrate() {
     pass="$(security find-generic-password -a "$old_user" -s "$old_svc" -w 2>/dev/null || true)"
     if [[ -n "$pass" ]]; then
       security add-generic-password -a "$old_user" -s "$new_svc" -w "$pass" -U 2>/dev/null || true
-      security delete-generic-password -a "$old_user" -s "$old_svc" 2>/dev/null || true
+      security delete-generic-password -a "$old_user" -s "$old_svc" >/dev/null 2>&1 || true
       ok "Proxy password migrated → Keychain: $new_svc"
       ok "Old Keychain entry '$old_svc' removed"
     else
@@ -842,7 +842,7 @@ EOF
       local puser; puser="$(read_conf "$PROXIES_DIR/${name}.conf" PROXY_USER)"
       local psvc;  psvc="$(read_conf  "$PROXIES_DIR/${name}.conf" PROXY_KEYCHAIN_SERVICE)"
       psvc="${psvc:-$(keychain_service "$name")}"
-      if security delete-generic-password -a "${puser:-}" -s "$psvc" 2>/dev/null; then
+      if security delete-generic-password -a "${puser:-}" -s "$psvc" >/dev/null 2>&1; then
         info "Keychain entry removed"
       else
         info "Keychain entry not found (skipped)"
@@ -971,7 +971,7 @@ EOF
       pass="$(security find-generic-password -a "$puser" -s "$old_svc" -w 2>/dev/null || true)"
       if [[ -n "$pass" ]]; then
         security add-generic-password -a "$puser" -s "$new_svc" -w "$pass" -U 2>/dev/null || true
-        security delete-generic-password -a "$puser" -s "$old_svc" 2>/dev/null || true
+        security delete-generic-password -a "$puser" -s "$old_svc" >/dev/null 2>&1 || true
         info "Keychain entry renamed: $old_svc → $new_svc"
       else
         warn "Could not migrate Keychain entry — run: claude-proxy proxy set-password $new"
@@ -1138,7 +1138,7 @@ case "$cmd" in
       _u="$(read_conf "$f" PROXY_USER)"
       _s="$(read_conf "$f" PROXY_KEYCHAIN_SERVICE)"
       _s="${_s:-claude-proxy:$(basename "$f" .conf)}"
-      security delete-generic-password -a "${_u:-}" -s "$_s" 2>/dev/null && \
+      security delete-generic-password -a "${_u:-}" -s "$_s" >/dev/null 2>&1 && \
         info "Keychain removed: $_s" || true
     done
     shopt -u nullglob
