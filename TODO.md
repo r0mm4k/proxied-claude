@@ -170,11 +170,14 @@ Planned improvements for future iterations.
 
 - [ ] 25. **`claude-proxy update` — confirmation + version preview** — currently updates
   silently without showing what version is being installed or asking for confirmation.
-  Two improvements:
+  Improvements:
   - Before downloading: fetch and display the new version number, ask `Upgrade to vX.Y.Z? [y/N]`
+  - For major version bumps (e.g. v1 → v2): show a prominent warning with a link to
+    release notes / migration guide before asking; user can abort and read first
   - `claude-proxy version --check` (or hint in `claude-proxy status`): compare installed
     version against latest on GitHub and show a hint if an update is available — without
     blocking or auto-fetching on every run (only on explicit `version` / `status` call)
+  - Depends on: #22 (GitHub Releases, where version info and release notes are published)
 
 ---
 
