@@ -777,14 +777,14 @@ cmd_proxy() {
         return
       fi
       echo ""
-      printf "  %-20s  %-30s  %s\n" "PROXY" "HOST" "USED BY PROFILES"
-      printf "  %-20s  %-30s  %s\n" "-----" "----" "----------------"
+      printf "  %-20s  %-38s  %s\n" "PROXY" "HOST" "USED BY PROFILES"
+      printf "  %-20s  %-38s  %s\n" "-----" "----" "----------------"
       for f in "${files[@]}"; do
         local pname; pname="$(basename "$f" .conf)"
         local phost; phost="$(read_conf "$f" PROXY_HOST)"
         local puser; puser="$(read_conf "$f" PROXY_USER)"
         local used_by; used_by="$(profiles_using_proxy "$pname")"
-        printf "  %-20s  %-30s  %s\n" \
+        printf "  %-20s  %-38s  %s\n" \
           "$pname" "${puser:-?}@${phost:-?}" "${used_by:-(unused)}"
       done
       echo ""
