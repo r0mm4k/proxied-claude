@@ -473,7 +473,7 @@ cmd_profile() {
         die "--include-projects requires --from <source>"
       [[ -n "$copy_from" ]] && validate_name "$copy_from" "source profile name"
 
-      # Lock → create conf + dir → release (short hold)
+      # Lock → create conf → release (short hold); dir handled below
       lock_acquire
       local conf="$PROFILES_DIR/${name}.conf"
       [[ ! -f "$conf" ]] || die "Profile '$name' already exists."
@@ -484,12 +484,32 @@ CONFIG_VERSION=1
 PROFILE_CLAUDE_DIR="${claude_dir}"
 PROFILE_PROXY=""
 EOF
-      mkdir -p "$claude_dir"
       lock_release
+
+      local _login_note="Note: you need to log in to Claude the first time you use this profile"
+
+      if dir_has_data "$claude_dir"; then
+        if [[ -t 0 ]]; then
+          echo ""
+          warn "Directory $claude_dir already exists and contains data."
+          echo "  Your previous session data and settings are preserved."
+          echo ""
+          read -r -p "  Start fresh and delete existing data? [y/N] " _fresh
+          if [[ "${_fresh:-}" =~ ^[Yy]$ ]]; then
+            rm -rf "$claude_dir"
+          else
+            _login_note="Note: If your session expired, log in again when you first use this profile"
+          fi
+        else
+          warn "Directory $claude_dir already exists and contains data — using as-is"
+          _login_note="Note: If your session expired, log in again when you first use this profile"
+        fi
+      fi
+      mkdir -p "$claude_dir"
 
       ok "Profile '$name' created"
       info "Claude dir : $claude_dir"
-      info "Note: you need to log in to Claude the first time you use this profile"
+      info "$_login_note"
 
       # Copy settings (no lock — only writes into the new profile's dir)
       if [[ -n "$copy_from" ]]; then
