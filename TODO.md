@@ -27,7 +27,7 @@ Planned improvements for future iterations.
   - In interactive `profile create`, also ask "Copy projects too? [y/N]" when
     `--include-projects` becomes available
 
-- [ ] 3. **`profile create` — existing directory handling** — if `~/.claude-<name>` already
+- [x] 3. **`profile create` — existing directory handling** — if `~/.claude-<name>` already
   exists and is non-empty (e.g. after deleting and recreating a profile), warn the user
   and ask whether to start fresh:
   ```
