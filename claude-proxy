@@ -299,11 +299,6 @@ do_migrate() {
     [[ "$verbose" == "1" ]] && info "No v1 config found (proxy.conf). Nothing to migrate." || true
     return 0
   fi
-  if [[ -f "$LEGACY_CONF.migrated" ]]; then
-    [[ "$verbose" == "1" ]] && info "Already migrated (proxy.conf.migrated exists)." || true
-    return 0
-  fi
-
   echo "Migrating v1 config (proxy.conf) → v2 profiles/proxies..."
   echo ""
 

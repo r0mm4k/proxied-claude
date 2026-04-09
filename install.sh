@@ -87,7 +87,7 @@ ok "$CTL_PATH"
 # Delegation: claude-proxy is now installed, use it as single source of truth.
 
 LEGACY_CONF="$CONF_DIR/proxy.conf"
-if [[ -f "$LEGACY_CONF" && ! -f "$LEGACY_CONF.migrated" ]]; then
+if [[ -f "$LEGACY_CONF" ]]; then
   step "Migrating v1 config"
   "$CTL_PATH" migrate
 fi

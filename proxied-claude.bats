@@ -901,7 +901,6 @@ EOF
 _run_migration() {
   local legacy="$CONF_DIR/proxy.conf"
   [[ -f "$legacy" ]] || return 0
-  [[ ! -f "$legacy.migrated" ]] || return 0
 
   local old_host; old_host="$(read_conf "$legacy" CLAUDE_PROXY_HOST)"
   local old_user; old_user="$(read_conf "$legacy" CLAUDE_PROXY_USER)"
@@ -997,13 +996,6 @@ EOF
   _run_migration
   run active_profile
   [ "$output" = "default" ]
-}
-
-@test "migration: skipped if .migrated already exists" {
-  touch "$CONF_DIR/proxy.conf"
-  touch "$CONF_DIR/proxy.conf.migrated"
-  _run_migration
-  [ -f "$CONF_DIR/proxy.conf" ]
 }
 
 @test "migration: no proxy.conf → no proxies/default.conf created" {
