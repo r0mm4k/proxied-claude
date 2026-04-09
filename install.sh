@@ -71,7 +71,7 @@ TMP_CTL="$(mktemp)"
 trap 'rm -f "$TMP_WRAPPER" "$TMP_CTL"' EXIT
 
 curl -fsSL --proto '=https' --tlsv1.2 "${REPO_RAW}/proxied-claude" -o "$TMP_WRAPPER"
-sed "s@__CLAUDE_BIN__@${CLAUDE_BIN}@g" "$TMP_WRAPPER" > "${TMP_WRAPPER}.patched"
+sed "s@CLAUDE_BIN=\"__CLAUDE_BIN__\"@CLAUDE_BIN=\"${CLAUDE_BIN}\"@" "$TMP_WRAPPER" > "${TMP_WRAPPER}.patched"
 mv "${TMP_WRAPPER}.patched" "$TMP_WRAPPER"
 sudo cp "$TMP_WRAPPER" "$WRAPPER_PATH"
 sudo chmod +x "$WRAPPER_PATH"
