@@ -32,7 +32,7 @@ proxied-claude
   └─ loads profiles/<n>.conf       → CLAUDE_CONFIG_DIR, linked proxy name
   └─ loads proxies/<proxy>.conf    → host, user, keychain service name
   └─ fetches password from macOS Keychain (never written to disk)
-  └─ exports CLAUDE_CONFIG_DIR + HTTP_PROXY / HTTPS_PROXY
+  └─ exports CLAUDE_CONFIG_DIR (named profiles only) + HTTP_PROXY / HTTPS_PROXY
   └─ ensures ide/ symlink exists → ~/.config/proxied-claude/ide/
   └─ exec → claude (original binary)
 ```
