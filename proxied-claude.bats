@@ -29,11 +29,13 @@ setup() {
   export ACTIVE_FILE="$CONF_DIR/active_profile"
   export LOCK_DIR="$CONF_DIR/.lock"
   mkdir -p "$PROFILES_DIR" "$PROXIES_DIR"
+  unset PROXIED_CLAUDE_PROFILE
   _define_helpers
 }
 
 teardown() {
   rm -rf "$TEST_DIR"
+  unset PROXIED_CLAUDE_PROFILE
 }
 
 # ── Helpers (mirror exact implementations from claude-proxy) ──────────────────
