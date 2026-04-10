@@ -57,6 +57,10 @@ proxied-claude runs:
 ### `proxied-claude` (wrapper)
 - Remove `ACTIVE_DIR` variable
 - Remove `ln -sfn "$CLAUDE_DIR" "$ACTIVE_DIR"` block (3 lines + guard)
+- Add safety net after `mkdir -p "$CLAUDE_DIR"`:
+  `[[ -e "$CLAUDE_DIR/ide" ]] || ln -s "$CONF_DIR/ide" "$CLAUDE_DIR/ide"`
+  Covers the default profile when `~/.claude/` is created lazily on first run,
+  and any other profile where `ide/` symlink is missing for any reason.
 - Update header comment: remove mention of `active_dir` symlink update
 
 ### `claude-proxy`
@@ -64,7 +68,10 @@ proxied-claude runs:
 - `write_active()`: remove `ln -sfn "$(profile_claude_dir "$1")" "$ACTIVE_DIR"` line
 - Remove `_sync-active-dir` hidden command (lines 1175–1177)
 - `ensure_default_profile()`: add `mkdir -p "$CONF_DIR/ide"` to guarantee shared dir exists
-- `profile create`: after `mkdir -p "$claude_dir"`, add `ln -s "$CONF_DIR/ide" "$claude_dir/ide"`
+- `profile create`: after `mkdir -p "$claude_dir"`, add idempotent symlink creation:
+  `[[ -L "$claude_dir/ide" ]] || { rm -rf "$claude_dir/ide"; ln -s "$CONF_DIR/ide" "$claude_dir/ide"; }`
+  Handles all branches: Y (fresh dir) → creates symlink; N (existing dir with real `ide/`) →
+  migrates to symlink; already a symlink → no-op.
 - `profile rename`: no changes needed — `mv "$old_dir" "$new_dir"` carries the symlink as-is;
   absolute target `~/.config/proxied-claude/ide/` stays valid after the move
 - `print_help()`: change `Config dir: ~/.config/proxied-claude/active_dir` → `~/.config/proxied-claude`
@@ -73,9 +80,12 @@ proxied-claude runs:
 
 ### `install.sh`
 - Update IDE hint: `Config dir: ~/.config/proxied-claude`
+- Remove: call to `_sync-active-dir` command (command is deleted)
 - Add: `mkdir -p "$CONF_DIR/ide"` to create shared dir
-- Add migration for `~/.claude/ide/`: if real directory → move contents + replace with symlink;
-  if absent → create symlink. Handles v1→v2 upgrades where default profile dir may exist.
+- Add idempotent migration helper for each profile dir (including `~/.claude`):
+  `[[ -L "$dir/ide" ]] || { rm -rf "$dir/ide"; ln -s "$CONF_DIR/ide" "$dir/ide"; }`
+  Lock files are ephemeral (contain stale PIDs/authTokens after restart) — no need to
+  preserve contents, just replace real dir with symlink.
 
 ### `proxied-claude.bats`
 - Remove `export ACTIVE_DIR=...` from test setup
@@ -83,7 +93,9 @@ proxied-claude runs:
 - Delete 4 tests: `write_active: active_dir *` (they test removed behaviour)
 - Delete 1 test: `profile use: active_dir updated after use`
 - Add test: `profile create: ide/ is a symlink pointing to shared dir`
-- Add test: `write_active: does not create active_dir symlink`
+- Add test: `profile create: ide/ symlink survives existing-dir N-branch` (real `ide/` dir exists,
+  user keeps it — verify `ide/` becomes a symlink after create)
+- Add test: `proxied-claude: creates ide/ symlink if missing` (safety net in wrapper)
 
 ### `CLAUDE.md`
 - Remove `active_dir` from component list
