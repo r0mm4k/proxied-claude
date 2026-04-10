@@ -430,8 +430,8 @@ Proxy commands:
   claude-proxy proxy check <n>
 
 Shortcuts:
-  claude-proxy use <n>     → profile use
-  claude-proxy run <n>     → launch with profile (no global switch)
+  claude-proxy use <n>        → profile use
+  claude-proxy run <n>        → launch with profile (no global switch)
   claude-proxy status         → full overview (active profile + all lists)
   claude-proxy check          → proxy check (active profile's proxy)
   claude-proxy version        → print version
@@ -464,8 +464,8 @@ cmd_profile() {
         return
       fi
       echo ""
-      printf "  %-20s  %-18s  %-30s  %s\n" "PROFILE" "PROXY" "DIR" "ACTIVE"
-      printf "  %-20s  %-18s  %-30s  %s\n" "-------" "-----" "---" "------"
+      printf "  %-20s  %-18s  %-30s\n" "PROFILE" "PROXY" "DIR"
+      printf "  %-20s  %-18s  %-30s\n" "-------" "-----" "---"
       for f in "${files[@]}"; do
         local name; name="$(basename "$f" .conf)"
         local proxy;     proxy="$(read_conf "$f" PROFILE_PROXY)"
