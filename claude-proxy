@@ -171,6 +171,15 @@ do_copy_settings() {
   local copied=0
   mkdir -p "$dst_dir"
 
+  # Locate .claude.json for each profile dir (for mcpServers handling).
+  # Claude Code writes to CLAUDE_CONFIG_DIR/.claude.json; legacy default profile
+  # wrote to ${dir}.json (i.e. ~/.claude.json) when CLAUDE_CONFIG_DIR was unset.
+  local src_claude_json="" dst_claude_json=""
+  if [[ -f "${src_dir}/.claude.json" ]]; then src_claude_json="${src_dir}/.claude.json"
+  elif [[ -f "${src_dir}.json" ]]; then src_claude_json="${src_dir}.json"; fi
+  if [[ -f "${dst_dir}/.claude.json" ]]; then dst_claude_json="${dst_dir}/.claude.json"
+  elif [[ -f "${dst_dir}.json" ]]; then dst_claude_json="${dst_dir}.json"; fi
+
   # Pass 1: collect conflicts
   local conflicts=()
   for f in "${SETTINGS_FILES[@]}"; do
@@ -197,6 +206,17 @@ do_copy_settings() {
       done
     done
     shopt -u nullglob
+  fi
+
+  # mcpServers conflict: both src and dst already have mcpServers
+  if [[ -n "$src_claude_json" && -n "$dst_claude_json" ]]; then
+    if python3 -c "
+import json, sys
+def has_mcp(p): return bool(json.load(open(p)).get('mcpServers'))
+sys.exit(0 if has_mcp(sys.argv[1]) and has_mcp(sys.argv[2]) else 1)
+" "$src_claude_json" "$dst_claude_json" 2>/dev/null; then
+      conflicts+=(".claude.json (mcpServers)")
+    fi
   fi
 
   # Resolve conflicts
@@ -262,6 +282,25 @@ do_copy_settings() {
       done
     done
     shopt -u nullglob
+  fi
+
+  # Copy mcpServers from .claude.json (source replaces destination)
+  if [[ -n "$src_claude_json" ]]; then
+    local dst_cj
+    if [[ -n "$dst_claude_json" ]]; then dst_cj="$dst_claude_json"
+    elif [[ "$dst_dir" == "$HOME/.claude" ]]; then dst_cj="${dst_dir}.json"
+    else dst_cj="${dst_dir}/.claude.json"; fi
+    if python3 -c "
+import json, sys, os
+src_mcp = json.load(open(sys.argv[1])).get('mcpServers', {})
+if not src_mcp: sys.exit(1)
+dst = json.load(open(sys.argv[2])) if os.path.exists(sys.argv[2]) else {}
+dst['mcpServers'] = src_mcp
+open(sys.argv[2], 'w').write(json.dumps(dst, indent=2) + '\n')
+" "$src_claude_json" "$dst_cj" 2>/dev/null; then
+      info "Copied mcpServers (.claude.json)"
+      (( copied++ )) || true
+    fi
   fi
 
   if [[ $copied -eq 0 ]]; then

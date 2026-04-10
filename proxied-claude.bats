@@ -141,6 +141,14 @@ _define_helpers() {
           include_projects="${5:-0}"
     local copied=0
     mkdir -p "$dst_dir"
+    # Locate .claude.json for each profile dir (for mcpServers handling).
+    # Claude Code writes to CLAUDE_CONFIG_DIR/.claude.json; legacy default profile
+    # wrote to ${dir}.json (i.e. ~/.claude.json) when CLAUDE_CONFIG_DIR was unset.
+    local src_claude_json="" dst_claude_json=""
+    if [[ -f "${src_dir}/.claude.json" ]]; then src_claude_json="${src_dir}/.claude.json"
+    elif [[ -f "${src_dir}.json" ]]; then src_claude_json="${src_dir}.json"; fi
+    if [[ -f "${dst_dir}/.claude.json" ]]; then dst_claude_json="${dst_dir}/.claude.json"
+    elif [[ -f "${dst_dir}.json" ]]; then dst_claude_json="${dst_dir}.json"; fi
     # Pass 1: collect conflicts
     local conflicts=()
     for f in "${SETTINGS_FILES[@]}"; do
@@ -166,6 +174,16 @@ _define_helpers() {
         done
       done
       shopt -u nullglob
+    fi
+    # mcpServers conflict: both src and dst already have mcpServers
+    if [[ -n "$src_claude_json" && -n "$dst_claude_json" ]]; then
+      if python3 -c "
+import json, sys
+def has_mcp(p): return bool(json.load(open(p)).get('mcpServers'))
+sys.exit(0 if has_mcp(sys.argv[1]) and has_mcp(sys.argv[2]) else 1)
+" "$src_claude_json" "$dst_claude_json" 2>/dev/null; then
+        conflicts+=(".claude.json (mcpServers)")
+      fi
     fi
     # Resolve conflicts
     if [[ ${#conflicts[@]} -gt 0 ]]; then
@@ -224,6 +242,24 @@ _define_helpers() {
         done
       done
       shopt -u nullglob
+    fi
+    # Copy mcpServers from .claude.json (source replaces destination)
+    if [[ -n "$src_claude_json" ]]; then
+      local dst_cj
+      if [[ -n "$dst_claude_json" ]]; then dst_cj="$dst_claude_json"
+      elif [[ "$dst_dir" == "$HOME/.claude" ]]; then dst_cj="${dst_dir}.json"
+      else dst_cj="${dst_dir}/.claude.json"; fi
+      if python3 -c "
+import json, sys, os
+src_mcp = json.load(open(sys.argv[1])).get('mcpServers', {})
+if not src_mcp: sys.exit(1)
+dst = json.load(open(sys.argv[2])) if os.path.exists(sys.argv[2]) else {}
+dst['mcpServers'] = src_mcp
+open(sys.argv[2], 'w').write(json.dumps(dst, indent=2) + '\n')
+" "$src_claude_json" "$dst_cj" 2>/dev/null; then
+        info "Copied mcpServers (.claude.json)"
+        (( copied++ )) || true
+      fi
     fi
     if [[ $copied -eq 0 ]]; then
       info "No settings found in '$src_label' (nothing copied)"
@@ -864,6 +900,78 @@ EOF
   echo "# memory" > "$src/projects/my-repo/memory/MEMORY.md"
   do_copy_settings "$src" "$dst" "src" "dst"
   [ ! -d "$dst/projects" ]
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# copy-settings — mcpServers
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@test "copy-settings: copies mcpServers from src .claude.json to new dst" {
+  local src="$TEST_DIR/src" dst="$TEST_DIR/dst"
+  mkdir -p "$src" "$dst"
+  printf '{"mcpServers":{"exa":{"command":"npx","args":["exa"]}}}\n' \
+    > "$src/.claude.json"
+  do_copy_settings "$src" "$dst" "src" "dst"
+  [ -f "$dst/.claude.json" ]
+  run python3 -c "import json; d=json.load(open('$dst/.claude.json')); print(list(d['mcpServers'].keys())[0])"
+  [ "$output" = "exa" ]
+}
+
+@test "copy-settings: copies mcpServers from src legacy .json path (default profile)" {
+  local src="$TEST_DIR/src" dst="$TEST_DIR/dst"
+  mkdir -p "$src" "$dst"
+  # legacy path: ${src}.json (simulates ~/.claude.json for the default profile)
+  printf '{"mcpServers":{"exa":{"command":"npx"}}}\n' > "${src}.json"
+  do_copy_settings "$src" "$dst" "src" "dst"
+  [ -f "$dst/.claude.json" ]
+  run python3 -c "import json; d=json.load(open('$dst/.claude.json')); print(list(d['mcpServers'].keys())[0])"
+  [ "$output" = "exa" ]
+}
+
+@test "copy-settings: copies mcpServers when dst .claude.json exists but has no mcpServers" {
+  local src="$TEST_DIR/src" dst="$TEST_DIR/dst"
+  mkdir -p "$src" "$dst"
+  printf '{"mcpServers":{"exa":{"command":"npx"}}}\n' > "$src/.claude.json"
+  printf '{"numStartups":3}\n' > "$dst/.claude.json"
+  do_copy_settings "$src" "$dst" "src" "dst"
+  run python3 -c "import json; d=json.load(open('$dst/.claude.json')); print(d['numStartups'], list(d['mcpServers'].keys())[0])"
+  [ "$output" = "3 exa" ]
+}
+
+@test "copy-settings: skips mcpServers when src mcpServers is empty" {
+  local src="$TEST_DIR/src" dst="$TEST_DIR/dst"
+  mkdir -p "$src" "$dst"
+  printf '{"mcpServers":{}}\n' > "$src/.claude.json"
+  do_copy_settings "$src" "$dst" "src" "dst"
+  [ ! -f "$dst/.claude.json" ]
+}
+
+@test "copy-settings: skips mcpServers when src has no .claude.json" {
+  local src="$TEST_DIR/src" dst="$TEST_DIR/dst"
+  mkdir -p "$src" "$dst"
+  echo '{"theme":"dark"}' > "$src/settings.json"
+  do_copy_settings "$src" "$dst" "src" "dst"
+  [ ! -f "$dst/.claude.json" ]
+}
+
+@test "copy-settings: mcpServers conflict included in conflict list (non-interactive dies)" {
+  local src="$TEST_DIR/src" dst="$TEST_DIR/dst"
+  mkdir -p "$src" "$dst"
+  printf '{"mcpServers":{"exa":{"command":"npx"}}}\n' > "$src/.claude.json"
+  printf '{"mcpServers":{"other":{"command":"other"}}}\n' > "$dst/.claude.json"
+  run _run_ni do_copy_settings "$src" "$dst" "src" "dst"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"conflicting"* ]]
+}
+
+@test "copy-settings: skips mcpServers silently when src .claude.json is malformed" {
+  local src="$TEST_DIR/src" dst="$TEST_DIR/dst"
+  mkdir -p "$src" "$dst"
+  printf 'not valid json\n' > "$src/.claude.json"
+  echo '{"theme":"dark"}' > "$src/settings.json"
+  run do_copy_settings "$src" "$dst" "src" "dst"
+  [ "$status" -eq 0 ]
+  [ ! -f "$dst/.claude.json" ]
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
