@@ -1435,14 +1435,14 @@ EOF
 
 @test "architecture: wrapper has no active_dir" {
   local count
-  count="$(grep -c "active_dir\|ACTIVE_DIR" "$(dirname "$BATS_TEST_FILENAME")/proxied-claude" 2>/dev/null || echo 0)"
-  [ "$count" -eq 0 ]
+  count="$(grep -c "active_dir\|ACTIVE_DIR" "$(dirname "$BATS_TEST_FILENAME")/proxied-claude" 2>/dev/null; true)"
+  [ "${count:-0}" -eq 0 ]
 }
 
 @test "architecture: wrapper creates ide/ symlink if missing" {
   local count
-  count="$(grep -c 'CLAUDE_DIR/ide' "$(dirname "$BATS_TEST_FILENAME")/proxied-claude" 2>/dev/null || echo 0)"
-  [ "$count" -ge 1 ]
+  count="$(grep -c 'CLAUDE_DIR/ide' "$(dirname "$BATS_TEST_FILENAME")/proxied-claude" 2>/dev/null; true)"
+  [ "${count:-0}" -ge 1 ]
 }
 
 @test "architecture: wrapper reads PROXIED_CLAUDE_PROFILE" {
