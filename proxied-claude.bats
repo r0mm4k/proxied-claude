@@ -27,7 +27,6 @@ setup() {
   export PROFILES_DIR="$CONF_DIR/profiles"
   export PROXIES_DIR="$CONF_DIR/proxies"
   export ACTIVE_FILE="$CONF_DIR/active_profile"
-  export ACTIVE_DIR="$CONF_DIR/active_dir"
   export LOCK_DIR="$CONF_DIR/.lock"
   mkdir -p "$PROFILES_DIR" "$PROXIES_DIR"
   _define_helpers
@@ -65,7 +64,6 @@ _define_helpers() {
   write_active() {
     local tmp; tmp="$(mktemp "${ACTIVE_FILE}.XXXXXX")"
     echo "$1" > "$tmp"; mv "$tmp" "$ACTIVE_FILE"
-    ln -sfn "$(profile_claude_dir "$1")" "$ACTIVE_DIR"
   }
 
   # Mirrors profile resolution logic from proxied-claude
@@ -450,38 +448,6 @@ EOF
   [ "$output" = "1" ]
 }
 
-@test "write_active: creates active_dir symlink" {
-  make_profile "work"
-  write_active "work"
-  [ -L "$ACTIVE_DIR" ]
-}
-
-@test "write_active: active_dir points to correct claude dir" {
-  make_profile "work"
-  write_active "work"
-  local expected; expected="$(profile_claude_dir "work")"
-  local actual; actual="$(readlink "$ACTIVE_DIR")"
-  [ "$actual" = "$expected" ]
-}
-
-@test "write_active: active_dir updates when profile switches" {
-  make_profile "work"
-  make_profile "personal"
-  write_active "work"
-  write_active "personal"
-  local actual; actual="$(readlink "$ACTIVE_DIR")"
-  [ "$actual" = "$(profile_claude_dir "personal")" ]
-}
-
-@test "write_active: active_dir differs per profile" {
-  make_profile "work"
-  make_profile "personal"
-  write_active "work"
-  local work_link; work_link="$(readlink "$ACTIVE_DIR")"
-  write_active "personal"
-  local personal_link; personal_link="$(readlink "$ACTIVE_DIR")"
-  [ "$work_link" != "$personal_link" ]
-}
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # read_conf (grep-based)
@@ -1468,14 +1434,6 @@ EOF
   [ "$output" = "1" ]
 }
 
-@test "profile use: active_dir updated after use" {
-  make_profile "work"
-  make_profile "personal"
-  write_active "work"
-  write_active "personal"
-  local actual; actual="$(readlink "$ACTIVE_DIR")"
-  [ "$actual" = "$(profile_claude_dir "personal")" ]
-}
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PROXIED_CLAUDE_PROFILE override
