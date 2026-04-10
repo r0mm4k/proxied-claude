@@ -73,7 +73,7 @@ if [[ -z "$CLAUDE_DIR" ]]; then
 fi
 
 mkdir -p "$CLAUDE_DIR"
-export CLAUDE_CONFIG_DIR="$CLAUDE_DIR"
+[[ "$CLAUDE_DIR" != "$HOME/.claude" ]] && export CLAUDE_CONFIG_DIR="$CLAUDE_DIR"
 
 # ── Ensure ide/ symlink exists (IDE lock-file discovery) ─────────────────────
 mkdir -p "$CONF_DIR/ide"
