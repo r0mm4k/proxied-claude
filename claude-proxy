@@ -42,7 +42,6 @@ CONF_DIR="$HOME/.config/proxied-claude"
 PROFILES_DIR="$CONF_DIR/profiles"
 PROXIES_DIR="$CONF_DIR/proxies"
 ACTIVE_FILE="$CONF_DIR/active_profile"
-ACTIVE_DIR="$CONF_DIR/active_dir"
 LOCK_DIR="$CONF_DIR/.lock"
 LEGACY_CONF="$CONF_DIR/proxy.conf"
 
@@ -111,12 +110,11 @@ active_profile() {
   fi
 }
 
-# Atomic write — prevents partial reads. Also updates active_dir symlink for IDE integration.
+# Atomic write — prevents partial reads.
 write_active() {
   local tmp; tmp="$(mktemp "${ACTIVE_FILE}.XXXXXX")"
   echo "$1" > "$tmp"
   mv "$tmp" "$ACTIVE_FILE"
-  ln -sfn "$(profile_claude_dir "$1")" "$ACTIVE_DIR"
 }
 
 require_profile() {
@@ -391,6 +389,7 @@ EOF
 
 ensure_default_profile() {
   ensure_dirs
+  mkdir -p "$CONF_DIR/ide"
   if [[ ! -f "$PROFILES_DIR/default.conf" ]]; then
     cat > "$PROFILES_DIR/default.conf" <<EOF
 CONFIG_VERSION=1
@@ -443,7 +442,7 @@ Shortcuts:
 
 IDE integration (JetBrains / VS Code):
   Claude command : /usr/local/bin/proxied-claude
-  Config dir     : ~/.config/proxied-claude/active_dir
+  Config dir     : ~/.config/proxied-claude
 
 EOF
 }
@@ -529,6 +528,7 @@ EOF
         fi
       fi
       mkdir -p "$claude_dir"
+      [[ -L "$claude_dir/ide" ]] || { rm -rf "$claude_dir/ide"; ln -s "$CONF_DIR/ide" "$claude_dir/ide"; }
 
       ok "Profile '$name' created"
       info "Claude dir : $(display_path "$claude_dir")"
@@ -1096,7 +1096,7 @@ case "$cmd" in
     echo ""
     echo "  ── IDE integration ────────────────────────────"
     echo "  Command    : $WRAPPER_PATH"
-    echo "  Config dir : $(display_path "$CONF_DIR/active_dir")"
+    echo "  Config dir : $(display_path "$CONF_DIR")"
     echo ""
     ;;
 
@@ -1138,7 +1138,7 @@ case "$cmd" in
     echo "This will remove:"
     echo "  $WRAPPER_PATH"
     echo "  $CTL_PATH"
-    echo "  $CONF_DIR (all profiles, proxy configs, active_profile)"
+    echo "  $CONF_DIR (all profiles, proxy configs, active_profile, shared ide/)"
     echo "  All Keychain entries for managed proxies"
     echo ""
     echo "Will NOT delete: ~/.claude  ~/.claude-*  (your Claude account data)"
@@ -1170,10 +1170,6 @@ case "$cmd" in
     validate_name "$_run_profile" "profile name"
     require_profile "$_run_profile"
     PROXIED_CLAUDE_PROFILE="$_run_profile" exec "$WRAPPER_PATH" "$@"
-    ;;
-
-  _sync-active-dir)
-    ln -sfn "$(profile_claude_dir "$(active_profile)")" "$ACTIVE_DIR"
     ;;
 
   "")
