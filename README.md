@@ -37,7 +37,7 @@ proxied-claude
   └─ exec → claude (original binary)
 ```
 
-The wrapper is intentionally thin (~100 lines) — no migration, no self-repair, no overhead. All management is done by `claude-proxy`.
+The wrapper is intentionally thin (~109 lines) — no migration, no self-repair, no overhead. All management is done by `claude-proxy`.
 
 **Default profile:** A profile named `default` is created automatically on install and points to `~/.claude` — the standard Claude Code directory. If you never create additional profiles, everything works exactly as before.
 
@@ -54,6 +54,12 @@ The wrapper is intentionally thin (~100 lines) — no migration, no self-repair,
 ---
 
 ## Install
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/r0mm4k/proxied-claude/main/install.sh)
+```
+
+Or if you have the repo cloned:
 
 ```bash
 chmod +x ./install.sh
@@ -243,7 +249,6 @@ claude-proxy update
 # ✅  Old Keychain entry 'claude-proxy' removed
 # ✅  Created proxies/default.conf (john@10.0.0.1:3128)
 # ✅  Created profiles/default.conf → ~/.claude
-# ✅  Old config saved as proxy.conf.migrated
 # ── Installing proxied-claude ──
 # ✅  /usr/local/bin/proxied-claude
 # ── Installing claude-proxy ──

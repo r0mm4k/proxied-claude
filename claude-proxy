@@ -464,15 +464,15 @@ cmd_profile() {
         return
       fi
       echo ""
-      printf "  %-20s  %-18s  %-30s  %s\n" "PROFILE" "PROXY" "DIR" ""
-      printf "  %-20s  %-18s  %-30s\n" "-------" "-----" "---"
+      printf "  %-20s  %-18s  %-30s  %s\n" "PROFILE" "PROXY" "DIR" "ACTIVE"
+      printf "  %-20s  %-18s  %-30s  %s\n" "-------" "-----" "---" "------"
       for f in "${files[@]}"; do
         local name; name="$(basename "$f" .conf)"
         local proxy;     proxy="$(read_conf "$f" PROFILE_PROXY)"
         local claude_dir; claude_dir="$(profile_claude_dir "$name")"
         local marker=""; [[ "$name" == "$active" ]] && marker="◀ active"
         printf "  %-20s  %-18s  %-30s  %s\n" \
-          "$name" "${proxy:-(no proxy)}" "$claude_dir" "$marker"
+          "$name" "${proxy:-(no proxy)}" "$(display_path "$claude_dir")" "$marker"
       done
       echo ""
       ;;
@@ -699,6 +699,7 @@ EOF
       done
       [[ -n "$from_profile" ]] || die "Usage: claude-proxy profile copy-settings <profile> --from <source> [--include-projects]"
       validate_name "$from_profile" "source profile name"
+      [[ "$name" != "$from_profile" ]] || die "Cannot copy a profile to itself."
       require_profile "$name"
       require_profile "$from_profile"
       local src_dir; src_dir="$(profile_claude_dir "$from_profile")"
@@ -804,7 +805,6 @@ cmd_proxy() {
       ;;
 
     create)
-      lock_acquire
       require_interactive
       local name="${1:-}" host="${2:-}" user="${3:-}"
       [[ -n "$name" && -n "$host" && -n "$user" ]] || \
@@ -814,17 +814,27 @@ cmd_proxy() {
         die "Invalid host format '$host'. Expected hostname:PORT (e.g. 10.0.0.1:3128)"
       ensure_dirs
       local conf="$PROXIES_DIR/${name}.conf"
-      [[ ! -f "$conf" ]] || die "Proxy '$name' already exists. View: claude-proxy proxy show $name"
       local svc; svc="$(keychain_service "$name")"
+      # Fast-fail before prompting (non-atomic; re-checked under lock below)
+      [[ ! -f "$conf" ]] || die "Proxy '$name' already exists. View: claude-proxy proxy show $name"
+      # Prompt for password BEFORE acquiring lock — avoids holding lock during
+      # unbounded interactive input. Conf is written only after password is stored.
+      echo "Creating proxy '$name' ($user@$host)"
+      echo "Enter proxy password (stored in macOS Keychain):"
+      security add-generic-password -a "$user" -s "$svc" -U -w
+      # Now acquire lock and write conf atomically
+      lock_acquire
+      if [[ -f "$conf" ]]; then
+        security delete-generic-password -a "$user" -s "$svc" 2>/dev/null || true
+        lock_release
+        die "Proxy '$name' already exists (created concurrently). View: claude-proxy proxy show $name"
+      fi
       cat > "$conf" <<EOF
 CONFIG_VERSION=1
 PROXY_HOST="${host}"
 PROXY_USER="${user}"
 PROXY_KEYCHAIN_SERVICE="${svc}"
 EOF
-      echo "Creating proxy '$name' ($user@$host)"
-      echo "Enter proxy password (stored in macOS Keychain):"
-      security add-generic-password -a "$user" -s "$svc" -U -w
       ok "Proxy '$name' created"
       info "Keychain service : $svc"
       info "Link to a profile: claude-proxy profile set-proxy <profile> $name"
@@ -920,7 +930,9 @@ EOF
 
       # 1. TCP
       printf "  %-44s" "TCP connect to $proxy_ip:$proxy_port ..."
-      if nc -z -w 5 "$proxy_ip" "$proxy_port" 2>/dev/null; then
+      if ! command -v nc >/dev/null 2>&1; then
+        echo "⚠️  skipped (nc not available)"
+      elif nc -z -w 5 "$proxy_ip" "$proxy_port" 2>/dev/null; then
         echo "✅ OK"
       else
         echo "❌ FAILED (host unreachable or port closed)"; exit 1
@@ -937,7 +949,7 @@ EOF
       case "$auth_code" in
         407) echo "❌ FAILED — proxy rejected credentials (HTTP 407)"
              info "Fix: claude-proxy proxy set-password $name"; exit 1 ;;
-        000) echo "⚠️  No response (may still work for CONNECT tunnels)" ;;
+        000) echo "⚠️  No response to plain HTTP (expected for strict CONNECT-only proxies — checking tunnel next...)" ;;
         *)   echo "✅ OK (HTTP $auth_code)" ;;
       esac
 

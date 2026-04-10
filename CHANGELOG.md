@@ -118,6 +118,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   silent no-op when proxied-claude is not installed
 
 ### Fixed
+- **`proxy create` partial-state on Ctrl-C** — password is now prompted and stored in
+  Keychain before the conf file is written; previously Ctrl-C during the password prompt
+  left a conf file with no Keychain entry, causing subsequent `proxy show`/`check` to fail
+- **`proxy create` lock held during password prompt** — lock is now released before the
+  interactive password prompt and re-acquired to write the conf atomically; previously the
+  lock blocked all other mutating commands for the entire unbounded user input wait
+- **`proxy check` TCP step with no `nc`** — now skips TCP check with a warning instead
+  of crashing; `nc` is standard on macOS but this makes the command more robust
+- **`profile list` DIR column** — now uses `display_path` (tilde-abbreviated) consistent
+  with all other commands that print Claude dirs
+- **`profile copy-settings` self-copy** — now exits with a clear error instead of silently
+  running a no-op copy when source and destination profile are the same
 - **`proxied-claude` safety-net** — `mkdir -p` now ensures `~/.config/proxied-claude/ide/`
   exists before creating the symlink; previously a broken symlink caused the JetBrains plugin
   to fail with `NoSuchFileException` on first launch after installing without running `install.sh`
