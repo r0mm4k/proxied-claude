@@ -222,10 +222,10 @@ Planned improvements for future iterations.
   so the `update` command can pin to a specific version (TODO #6) and users can audit what
   they're installing.
 
-- [ ] 26. **IDE restart after `claude-proxy use`** — JetBrains resolves the `active_dir` symlink
-  once at plugin startup and caches the real path. Changing the symlink via `claude-proxy use`
-  is not picked up until IDE restart. Upstream bug: [anthropics/claude-code#1698](https://github.com/anthropics/claude-code/issues/1698).
-  Workaround documented in README. Revisit when the bug is fixed upstream.
+- [x] 26. **IDE restart after `claude-proxy use`** — Fixed: replaced `active_dir` symlink with
+  shared `~/.config/proxied-claude/ide/` directory. All profiles' `ide/` dirs are symlinks to
+  this physical location. Plugin Config directory is `~/.config/proxied-claude` (real path).
+  No IDE restart needed after `claude-proxy use`.
 
 - [ ] 27. **Copy `mcpServers` when creating/copying a profile** — when `CLAUDE_CONFIG_DIR` is set,
   Claude Code reads user-scoped MCP servers from `${CLAUDE_CONFIG_DIR}/.claude.json` (not the

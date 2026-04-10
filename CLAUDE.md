@@ -5,13 +5,12 @@ Shell utility to run Claude Code behind a corporate HTTP proxy with multi-profil
 ## Architecture
 
 Three files, clear separation:
-- `proxied-claude` — thin launcher (~114 lines): resolves profile (env var override or active_profile) → fetches Keychain password → updates `active_dir` symlink → `exec claude`
+- `proxied-claude` — thin launcher (~108 lines): resolves profile (env var override or active_profile) → fetches Keychain password → ensures `ide/` symlink exists → `exec claude`
 - `claude-proxy` — all management logic: profiles, proxies, migration, lock (~1200 lines)
 - `install.sh` — download, patch `__CLAUDE_BIN__`, delegate wizard/migration to claude-proxy
 
 Config lives in `~/.config/proxied-claude/`:
 - `active_profile` — name of active profile
-- `active_dir` — symlink → active profile's Claude dir (IDE Config directory field)
 - `profiles/<n>.conf` — PROFILE_CLAUDE_DIR, PROFILE_PROXY
 - `proxies/<n>.conf` — PROXY_HOST, PROXY_USER, PROXY_KEYCHAIN_SERVICE
 
@@ -48,5 +47,5 @@ After completing a brainstorm/plan/implement cycle, delete the generated spec an
 - `claude-proxy` binary always calls `ensure_default_profile` on startup — do not run it in tests (touches `$HOME/.config`).
 - `install.sh` duplicates default-profile creation (lines 97–109) because on fresh install `claude-proxy migrate` is skipped. This is intentional.
 - Architecture tests check exact line counts in source files — update counts if you add matching lines to `proxied-claude` or `claude-proxy`.
-- `active_dir` symlink is updated in three places: `write_active()` (profile switch), `_sync-active-dir` (install/upgrade), and safety net in `proxied-claude` (guarded — skipped when `PROXIED_CLAUDE_PROFILE` override is active).
-- `PROXIED_CLAUDE_PROFILE` env var overrides global `active_profile` per-process only — does not update `active_dir`. `claude-proxy run <n>` is the user-facing shortcut.
+- `ide/` in each profile dir is a symlink to `~/.config/proxied-claude/ide/` (shared lock-file dir). Created in `profile create`, migrated in `install.sh`, safety-net in `proxied-claude`. Plugin Config directory is `~/.config/proxied-claude` — a real path, never a symlink.
+- `PROXIED_CLAUDE_PROFILE` env var overrides global `active_profile` per-process only. `claude-proxy run <n>` is the user-facing shortcut.

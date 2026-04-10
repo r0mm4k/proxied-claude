@@ -33,7 +33,7 @@ proxied-claude
   └─ loads proxies/<proxy>.conf    → host, user, keychain service name
   └─ fetches password from macOS Keychain (never written to disk)
   └─ exports CLAUDE_CONFIG_DIR + HTTP_PROXY / HTTPS_PROXY
-  └─ updates active_dir symlink (IDE integration, skipped when override active)
+  └─ ensures ide/ symlink exists → ~/.config/proxied-claude/ide/
   └─ exec → claude (original binary)
 ```
 
@@ -214,7 +214,7 @@ claude-proxy uninstall      # remove binaries + config (keeps ~/.claude* dirs)
 ```
 ~/.config/proxied-claude/
   active_profile              ← name of the currently active profile
-  active_dir                  ← symlink → active profile's Claude dir (for IDE)
+  ide/                        ← shared IDE lock-file dir (all profiles symlink here)
   .lock/                      ← concurrency lock (auto-managed)
   profiles/
     default.conf              ← always exists, points to ~/.claude
@@ -329,12 +329,10 @@ claude-proxy profile set-proxy default corp-lt
    ```
 3. **Settings → Tools → Claude Code [Beta]** → Config directory:
    ```
-   ~/.config/proxied-claude/active_dir
+   ~/.config/proxied-claude
    ```
 
-The config dir symlink always points to the active profile's Claude dir — updates automatically when you switch profiles with `claude-proxy use <n>`.
-
-> **Note:** After `claude-proxy use <n>`, restart the IDE for the new profile to take effect. JetBrains resolves the symlink once at plugin startup and caches the real path — changing the symlink is not picked up until restart. This is a known plugin limitation ([anthropics/claude-code#1698](https://github.com/anthropics/claude-code/issues/1698)).
+All profile `ide/` directories are symlinks to `~/.config/proxied-claude/ide/`. The plugin writes lock files to this shared physical location and the CLI finds them regardless of which profile is active — no IDE restart needed when switching profiles with `claude-proxy use <n>`.
 
 ### VS Code
 

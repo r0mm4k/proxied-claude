@@ -33,9 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `set-password <n>` — update password in Keychain
   - `show <n>` — show proxy details (password never shown)
   - `check <n>` — three-level health check: TCP → proxy auth (407 detection) → Anthropic API
-- **`active_dir` symlink** — `~/.config/proxied-claude/active_dir` always points to the
-  active profile's Claude dir; JetBrains/VS Code Config directory field set once and never
-  needs updating when switching profiles
+- **Shared `ide/` directory** — `~/.config/proxied-claude/ide/` is the single physical
+  location for IDE lock files; each profile's `ide/` is a symlink to it; plugin Config
+  directory is `~/.config/proxied-claude` (a real path, never a symlink); profile switching
+  requires no IDE restart
 - **`PROXIED_CLAUDE_PROFILE` env var** — per-session profile override without changing
   global `active_profile`; other terminals and the IDE are unaffected:
   ```bash
