@@ -121,6 +121,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`proxied-claude` safety-net** — `mkdir -p` now ensures `~/.config/proxied-claude/ide/`
   exists before creating the symlink; previously a broken symlink caused the JetBrains plugin
   to fail with `NoSuchFileException` on first launch after installing without running `install.sh`
+- **`claude-proxy status` IDE Config dir** — now outputs a full absolute path instead of
+  `~`-abbreviated path; JetBrains does not expand `~` in path fields, causing
+  `NoSuchFileException` when the value was copy-pasted from `status` output
 - **`proxy list` HOST column** — widened from 30 to 38 chars to prevent long
   usernames from running into the "USED BY PROFILES" column
 - **`copy-settings` path rewrite** — after copying `settings.json`, rewrites any

@@ -329,8 +329,10 @@ claude-proxy profile set-proxy default corp-lt
    ```
 3. **Settings → Tools → Claude Code [Beta]** → Config directory:
    ```
-   ~/.config/proxied-claude
+   /Users/yourname/.config/proxied-claude
    ```
+   Use the **full absolute path** — JetBrains does not expand `~`.
+   Run `claude-proxy status` to get the exact value ready to copy.
 
 All profile `ide/` directories are symlinks to `~/.config/proxied-claude/ide/`. The plugin writes lock files to this shared physical location and the CLI finds them regardless of which profile is active — no IDE restart needed when switching profiles with `claude-proxy use <n>`.
 

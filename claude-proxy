@@ -442,7 +442,7 @@ Shortcuts:
 
 IDE integration (JetBrains / VS Code):
   Claude command : /usr/local/bin/proxied-claude
-  Config dir     : ~/.config/proxied-claude
+  Config dir     : $HOME/.config/proxied-claude
 
 EOF
 }
@@ -1096,7 +1096,7 @@ case "$cmd" in
     echo ""
     echo "  ── IDE integration ────────────────────────────"
     echo "  Command    : $WRAPPER_PATH"
-    echo "  Config dir : $(display_path "$CONF_DIR")"
+    echo "  Config dir : $CONF_DIR"
     echo ""
     ;;
 
