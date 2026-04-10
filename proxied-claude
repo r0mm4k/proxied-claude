@@ -14,7 +14,6 @@ CONF_DIR="$HOME/.config/proxied-claude"
 PROFILES_DIR="$CONF_DIR/profiles"
 PROXIES_DIR="$CONF_DIR/proxies"
 ACTIVE_FILE="$CONF_DIR/active_profile"
-ACTIVE_DIR="$CONF_DIR/active_dir"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
@@ -76,13 +75,8 @@ fi
 mkdir -p "$CLAUDE_DIR"
 export CLAUDE_CONFIG_DIR="$CLAUDE_DIR"
 
-# ── Update active_dir symlink (IDE integration) ──────────────────────────────
-# Safety net: sync symlink with global active_profile.
-# Skipped when PROXIED_CLAUDE_PROFILE override is active — override sessions
-# are ephemeral and must not displace the global active_dir pointer.
-if [[ -z "${PROXIED_CLAUDE_PROFILE:-}" ]]; then
-  ln -sfn "$CLAUDE_DIR" "$ACTIVE_DIR"
-fi
+# ── Ensure ide/ symlink exists (IDE lock-file discovery) ─────────────────────
+[[ -e "$CLAUDE_DIR/ide" ]] || ln -s "$CONF_DIR/ide" "$CLAUDE_DIR/ide"
 
 # ── Apply proxy if linked ────────────────────────────────────────────────────
 
