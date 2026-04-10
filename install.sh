@@ -59,7 +59,7 @@ echo "Claude binary: $CLAUDE_BIN"
 # ── 2. Config directories ──────────────────────────────────────────────────
 
 step "Config directories"
-mkdir -p "$CONF_DIR/profiles" "$CONF_DIR/proxies"
+mkdir -p "$CONF_DIR/profiles" "$CONF_DIR/proxies" "$CONF_DIR/ide"
 ok "$CONF_DIR"
 
 # ── 3. Download and install binaries ───────────────────────────────────────
@@ -107,7 +107,15 @@ if [[ ! -f "$CONF_DIR/active_profile" || ! -s "$CONF_DIR/active_profile" ]]; the
   echo "default" > "$_tmp"
   mv "$_tmp" "$CONF_DIR/active_profile"
 fi
-"$CTL_PATH" _sync-active-dir
+
+# Migrate profile ide/ dirs to shared symlinks (idempotent)
+shopt -s nullglob
+for _pf in "$CONF_DIR/profiles"/*.conf; do
+  _pdir="$(grep -m1 "^PROFILE_CLAUDE_DIR=" "$_pf" 2>/dev/null | cut -d'"' -f2)"
+  [[ -n "$_pdir" && -d "$_pdir" ]] || continue
+  [[ -L "$_pdir/ide" ]] || { rm -rf "$_pdir/ide"; ln -s "$CONF_DIR/ide" "$_pdir/ide"; }
+done
+shopt -u nullglob
 
 # ── 6. First-run wizard (skipped on upgrade) ─────────────────────────────
 
@@ -175,7 +183,7 @@ echo "  proxied-claude"
 echo ""
 echo "JetBrains — Settings → Tools → Claude Code [Beta]:"
 echo "  Claude command : $WRAPPER_PATH"
-echo "  Config dir     : ~/.config/proxied-claude/active_dir"
+echo "  Config dir     : ~/.config/proxied-claude"
 echo ""
 echo "VS Code — settings.json:"
 echo "  \"claude.claudePath\": \"$WRAPPER_PATH\""
