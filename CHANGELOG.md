@@ -84,7 +84,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`CONFIG_VERSION=1`** in all conf files — foundation for future migrations
 - **Friendly error messages** for removed v1 commands (`set-all`, `set-host`, `set-user`)
 - **JetBrains and VS Code** integration documented in README
-- **Test suite** — `proxied-claude.bats` (171 tests, requires `bats-core`)
+- **Test suite** — `proxied-claude.bats` (173 tests, requires `bats-core`)
 
 ### Changed
 - **`proxied-claude` is now a thin, fast launcher** (~99 lines) — transparent wrapper,
@@ -118,6 +118,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   silent no-op when proxied-claude is not installed
 
 ### Fixed
+- **`proxied-claude` safety-net** — `mkdir -p` now ensures `~/.config/proxied-claude/ide/`
+  exists before creating the symlink; previously a broken symlink caused the JetBrains plugin
+  to fail with `NoSuchFileException` on first launch after installing without running `install.sh`
 - **`proxy list` HOST column** — widened from 30 to 38 chars to prevent long
   usernames from running into the "USED BY PROFILES" column
 - **`copy-settings` path rewrite** — after copying `settings.json`, rewrites any

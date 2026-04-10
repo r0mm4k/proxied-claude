@@ -76,6 +76,7 @@ mkdir -p "$CLAUDE_DIR"
 export CLAUDE_CONFIG_DIR="$CLAUDE_DIR"
 
 # ── Ensure ide/ symlink exists (IDE lock-file discovery) ─────────────────────
+mkdir -p "$CONF_DIR/ide"
 [[ -e "$CLAUDE_DIR/ide" ]] || ln -s "$CONF_DIR/ide" "$CLAUDE_DIR/ide"
 
 # ── Apply proxy if linked ────────────────────────────────────────────────────
