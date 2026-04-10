@@ -873,6 +873,8 @@ cmd_proxy() {
       # Now acquire lock and write conf atomically
       lock_acquire
       if [[ -f "$conf" ]]; then
+        # TOCTOU: conf appeared between our pre-check and lock_acquire.
+        # Release lock explicitly before die — EXIT trap won't fire here.
         security delete-generic-password -a "$user" -s "$svc" 2>/dev/null || true
         lock_release
         die "Proxy '$name' already exists (created concurrently). View: claude-proxy proxy show $name"
