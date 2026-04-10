@@ -407,7 +407,7 @@ statusline is unchanged.
 | `policy-limits.json` | file | ✅ Yes | Usage policy overrides |
 | `hooks/` | dir | ✅ Yes | Custom lifecycle hooks |
 | `plugins/` | dir | ✅ Yes | Installed plugins |
-| `.claude.json` (mcpServers) | file | ❌ No | MCP servers — add manually via `claude mcp add` |
+| `.claude.json` (mcpServers) | file | ✅ Yes | `mcpServers` key only; other keys are profile-specific |
 | `sessions/` | dir | ❌ No | Auth sessions — account-specific |
 | `history.jsonl` | file | ❌ No | Chat history — stays in source profile |
 | `cache/` | dir | ❌ No | Runtime cache |

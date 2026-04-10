@@ -227,7 +227,7 @@ Planned improvements for future iterations.
   this physical location. Plugin Config directory is `~/.config/proxied-claude` (real path).
   No IDE restart needed after `claude-proxy use`.
 
-- [ ] 27. **Copy `mcpServers` when creating/copying a profile** — when `CLAUDE_CONFIG_DIR` is set,
+- [x] 27. **Copy `mcpServers` when creating/copying a profile** — when `CLAUDE_CONFIG_DIR` is set,
   Claude Code reads user-scoped MCP servers from `${CLAUDE_CONFIG_DIR}/.claude.json` (not the
   global `~/.claude.json`). Each profile is fully isolated. Result: MCP servers added in one
   profile don't appear in others.

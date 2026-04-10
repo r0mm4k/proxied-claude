@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0] - 2026-04-07
 
 ### Added
+- **`copy-settings` mcpServers** — copies the `mcpServers` key from `.claude.json`
+  between profiles; source replaces destination on conflict (same batch confirmation
+  as all other files); handles both current (`${dir}/.claude.json`) and legacy
+  (`~/.claude.json`) paths
 - **Multi-profile support** — manage multiple Claude accounts with isolated config
   directories (`~/.claude-<n>`), each with an optional linked proxy
 - **Multi-proxy support** — named, reusable proxy configs stored separately from profiles
@@ -118,6 +122,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   silent no-op when proxied-claude is not installed
 
 ### Fixed
+- **`proxied-claude` default profile** — no longer sets `CLAUDE_CONFIG_DIR` for
+  `~/.claude`; restores correct `~/.claude.json` path and `Claude Code-credentials`
+  Keychain lookup for the default profile
+- **`copy-settings` plugin manifests** — rewrites stale `installPath` /
+  `installLocation` paths in `installed_plugins.json` and `known_marketplaces.json`
+  after copying `plugins/`
 - **`proxy create` partial-state on Ctrl-C** — password is now prompted and stored in
   Keychain before the conf file is written; previously Ctrl-C during the password prompt
   left a conf file with no Keychain entry, causing subsequent `proxy show`/`check` to fail
