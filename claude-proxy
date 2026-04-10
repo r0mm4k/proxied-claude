@@ -240,6 +240,15 @@ do_copy_settings() {
     fi
   done
 
+  # Rewrite absolute plugin cache paths in copied plugin manifests.
+  # Use | as delimiter so forward slashes in absolute paths are safe.
+  # Profile names are validated to [a-zA-Z0-9_-] so no | characters possible.
+  for _pf in "installed_plugins.json" "known_marketplaces.json"; do
+    [[ -f "$dst_dir/plugins/$_pf" ]] && \
+      sed -i '' "s|${src_dir}/plugins/|${dst_dir}/plugins/|g" \
+        "$dst_dir/plugins/$_pf"
+  done
+
   if [[ "$include_projects" == "1" ]]; then
     shopt -s nullglob
     for proj_dir in "$src_dir/projects"/*/; do

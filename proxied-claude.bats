@@ -203,6 +203,14 @@ _define_helpers() {
         [[ $dir_copied -gt 0 ]] && { info "Copied $d/ ($dir_copied item(s))"; (( copied++ )) || true; }
       fi
     done
+    # Rewrite absolute plugin cache paths in copied plugin manifests.
+    # Use | as delimiter so forward slashes in absolute paths are safe.
+    # Profile names are validated to [a-zA-Z0-9_-] so no | characters possible.
+    for _pf in "installed_plugins.json" "known_marketplaces.json"; do
+      [[ -f "$dst_dir/plugins/$_pf" ]] && \
+        sed -i '' "s|${src_dir}/plugins/|${dst_dir}/plugins/|g" \
+          "$dst_dir/plugins/$_pf"
+    done
     if [[ "$include_projects" == "1" ]]; then
       shopt -s nullglob
       for proj_dir in "$src_dir/projects"/*/; do
@@ -745,6 +753,30 @@ EOF
   echo "{}" > "$src/plugins/my-plugin.json"
   do_copy_settings "$src" "$dst" "src" "dst"
   [ -f "$dst/plugins/my-plugin.json" ]
+}
+
+@test "copy-settings: rewrites installPath in installed_plugins.json after copy" {
+  local src="$TEST_DIR/src" dst="$TEST_DIR/dst"
+  mkdir -p "$src/plugins" "$dst"
+  printf '{"plugins":[{"installPath":"%s/plugins/cache/my-plugin"}]}\n' "$src" \
+    > "$src/plugins/installed_plugins.json"
+  do_copy_settings "$src" "$dst" "src" "dst"
+  run grep -c "${dst}/plugins/cache/my-plugin" "$dst/plugins/installed_plugins.json"
+  [ "$output" = "1" ]
+  run grep -c "${src}/plugins/cache/my-plugin" "$dst/plugins/installed_plugins.json"
+  [ "$output" = "0" ]
+}
+
+@test "copy-settings: rewrites installLocation in known_marketplaces.json after copy" {
+  local src="$TEST_DIR/src" dst="$TEST_DIR/dst"
+  mkdir -p "$src/plugins" "$dst"
+  printf '{"marketplaces":[{"installLocation":"%s/plugins/marketplace"}]}\n' "$src" \
+    > "$src/plugins/known_marketplaces.json"
+  do_copy_settings "$src" "$dst" "src" "dst"
+  run grep -c "${dst}/plugins/marketplace" "$dst/plugins/known_marketplaces.json"
+  [ "$output" = "1" ]
+  run grep -c "${src}/plugins/marketplace" "$dst/plugins/known_marketplaces.json"
+  [ "$output" = "0" ]
 }
 
 @test "copy-settings: does not copy cache/ directory" {
