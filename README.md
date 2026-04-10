@@ -334,6 +334,8 @@ claude-proxy profile set-proxy default corp-lt
 
 The config dir symlink always points to the active profile's Claude dir — updates automatically when you switch profiles with `claude-proxy use <n>`.
 
+> **Note:** After `claude-proxy use <n>`, restart the IDE for the new profile to take effect. JetBrains resolves the symlink once at plugin startup and caches the real path — changing the symlink is not picked up until restart. This is a known plugin limitation ([anthropics/claude-code#1698](https://github.com/anthropics/claude-code/issues/1698)).
+
 ### VS Code
 
 Add to your `settings.json`:
@@ -394,12 +396,13 @@ statusline is unchanged.
 
 | Item | Type | Copied | Notes |
 |------|------|--------|-------|
-| `settings.json` | file | ✅ Yes | UI preferences, themes, MCP servers |
+| `settings.json` | file | ✅ Yes | UI preferences, themes, enabled plugins |
 | `CLAUDE.md` | file | ✅ Yes | Global Claude instructions |
 | `keybindings.json` | file | ✅ Yes | Custom keybindings |
 | `policy-limits.json` | file | ✅ Yes | Usage policy overrides |
 | `hooks/` | dir | ✅ Yes | Custom lifecycle hooks |
 | `plugins/` | dir | ✅ Yes | Installed plugins |
+| `.claude.json` (mcpServers) | file | ❌ No | MCP servers — add manually via `claude mcp add` |
 | `sessions/` | dir | ❌ No | Auth sessions — account-specific |
 | `history.jsonl` | file | ❌ No | Chat history — stays in source profile |
 | `cache/` | dir | ❌ No | Runtime cache |
