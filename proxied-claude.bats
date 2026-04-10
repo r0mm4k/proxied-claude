@@ -450,6 +450,43 @@ EOF
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# ide/ shared symlink
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@test "ide/: symlink created when dir does not exist" {
+  mkdir -p "$CONF_DIR/ide"
+  local claude_dir="$TEST_DIR/claude-work"
+  mkdir -p "$claude_dir"
+  # mirrors profile create logic
+  [[ -L "$claude_dir/ide" ]] || { rm -rf "$claude_dir/ide"; ln -s "$CONF_DIR/ide" "$claude_dir/ide"; }
+  [ -L "$claude_dir/ide" ]
+  [ "$(readlink "$claude_dir/ide")" = "$CONF_DIR/ide" ]
+}
+
+@test "ide/: real dir replaced by symlink (N-branch migration)" {
+  mkdir -p "$CONF_DIR/ide"
+  local claude_dir="$TEST_DIR/claude-work"
+  mkdir -p "$claude_dir/ide"
+  touch "$claude_dir/ide/59993.lock"   # stale lock file
+  # mirrors profile create / install.sh migration logic
+  [[ -L "$claude_dir/ide" ]] || { rm -rf "$claude_dir/ide"; ln -s "$CONF_DIR/ide" "$claude_dir/ide"; }
+  [ -L "$claude_dir/ide" ]
+  [ "$(readlink "$claude_dir/ide")" = "$CONF_DIR/ide" ]
+  [ ! -f "$claude_dir/ide/59993.lock" ]   # stale file gone
+}
+
+@test "ide/: existing symlink not touched" {
+  mkdir -p "$CONF_DIR/ide"
+  local claude_dir="$TEST_DIR/claude-work"
+  mkdir -p "$claude_dir"
+  ln -s "$CONF_DIR/ide" "$claude_dir/ide"
+  local before; before="$(readlink "$claude_dir/ide")"
+  # apply logic again — should be a no-op
+  [[ -L "$claude_dir/ide" ]] || { rm -rf "$claude_dir/ide"; ln -s "$CONF_DIR/ide" "$claude_dir/ide"; }
+  [ "$(readlink "$claude_dir/ide")" = "$before" ]
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # read_conf (grep-based)
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1391,9 +1428,21 @@ EOF
   [ "${count:-0}" -eq 3 ]
 }
 
-@test "architecture: _sync-active-dir not in print_help" {
+@test "architecture: _sync-active-dir removed" {
   run grep "_sync-active-dir" "$(dirname "$BATS_TEST_FILENAME")/claude-proxy"
-  [[ "$output" != *"print_help"* ]]
+  [ "$status" -ne 0 ]
+}
+
+@test "architecture: wrapper has no active_dir" {
+  local count
+  count="$(grep -c "active_dir\|ACTIVE_DIR" "$(dirname "$BATS_TEST_FILENAME")/proxied-claude" 2>/dev/null || echo 0)"
+  [ "$count" -eq 0 ]
+}
+
+@test "architecture: wrapper creates ide/ symlink if missing" {
+  local count
+  count="$(grep -c 'CLAUDE_DIR/ide' "$(dirname "$BATS_TEST_FILENAME")/proxied-claude" 2>/dev/null || echo 0)"
+  [ "$count" -ge 1 ]
 }
 
 @test "architecture: wrapper reads PROXIED_CLAUDE_PROFILE" {
