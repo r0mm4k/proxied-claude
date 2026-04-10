@@ -212,7 +212,18 @@ write_active() {
 }
 ```
 
-- [ ] **Step 3: Remove `_sync-active-dir` command**
+- [ ] **Step 3: Update stale comment above `write_active()`**
+
+Line 114, change from:
+```bash
+# Atomic write — prevents partial reads. Also updates active_dir symlink for IDE integration.
+```
+To:
+```bash
+# Atomic write — prevents partial reads.
+```
+
+- [ ] **Step 4: Remove `_sync-active-dir` command**
 
 Delete lines 1175–1177:
 ```bash
@@ -221,7 +232,7 @@ Delete lines 1175–1177:
     ;;
 ```
 
-- [ ] **Step 4: Add `mkdir -p "$CONF_DIR/ide"` in `ensure_default_profile()`**
+- [ ] **Step 5: Add `mkdir -p "$CONF_DIR/ide"` in `ensure_default_profile()`**
 
 Around line 392–404, change from:
 ```bash
@@ -237,7 +248,7 @@ ensure_default_profile() {
   if [[ ! -f "$PROFILES_DIR/default.conf" ]]; then
 ```
 
-- [ ] **Step 5: Add ide/ symlink in `profile create`**
+- [ ] **Step 6: Add ide/ symlink in `profile create`**
 
 Around line 531 in `profile create`, change from:
 ```bash
@@ -253,7 +264,7 @@ To:
       ok "Profile '$name' created"
 ```
 
-- [ ] **Step 6: Update `print_help()` IDE config dir**
+- [ ] **Step 7: Update `print_help()` IDE config dir**
 
 Around line 446, change:
 ```bash
@@ -264,7 +275,7 @@ To:
   Config dir     : ~/.config/proxied-claude
 ```
 
-- [ ] **Step 7: Update `status` command IDE config dir**
+- [ ] **Step 8: Update `status` command IDE config dir**
 
 Around line 1097–1099, change:
 ```bash
@@ -279,7 +290,7 @@ To:
     echo "  Config dir : $(display_path "$CONF_DIR")"
 ```
 
-- [ ] **Step 8: Update `uninstall` description**
+- [ ] **Step 9: Update `uninstall` description**
 
 Around line 1141, change:
 ```bash
@@ -290,15 +301,19 @@ To:
     echo "  $CONF_DIR (all profiles, proxy configs, active_profile, shared ide/)"
 ```
 
-- [ ] **Step 9: Run tests**
+- [ ] **Step 10: Run tests**
 
 ```bash
 bats proxied-claude.bats --filter "architecture: _sync-active-dir removed"
 bats proxied-claude.bats
 ```
-Expected: `architecture: _sync-active-dir removed` now PASSES. All other tests pass.
+Expected:
+- `architecture: _sync-active-dir removed` → PASSES
+- `architecture: wrapper has no active_dir` → still FAILS (proxied-claude changed in Task 4)
+- `architecture: wrapper creates ide/ symlink if missing` → still FAILS (proxied-claude changed in Task 4)
+- All other tests → PASS
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
 git add claude-proxy
@@ -343,18 +358,7 @@ export CLAUDE_CONFIG_DIR="$CLAUDE_DIR"
 [[ -e "$CLAUDE_DIR/ide" ]] || ln -s "$CONF_DIR/ide" "$CLAUDE_DIR/ide"
 ```
 
-- [ ] **Step 3: Update header comment**
-
-Around line 36, change:
-```bash
-  └─ updates active_dir symlink (IDE integration, skipped when override active)
-```
-To:
-```bash
-  └─ ensures ide/ symlink exists → ~/.config/proxied-claude/ide/
-```
-
-- [ ] **Step 4: Run architecture tests**
+- [ ] **Step 3: Run architecture tests**
 
 ```bash
 bats proxied-claude.bats --filter "architecture: wrapper has no active_dir"
@@ -363,7 +367,7 @@ bats proxied-claude.bats
 ```
 Expected: both architecture tests PASS. All tests pass.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add proxied-claude
@@ -573,16 +577,27 @@ git add CLAUDE.md CHANGELOG.md README.md TODO.md
 git commit -m "docs: update all references — active_dir removed, shared ide/ dir"
 ```
 
+- [ ] **Step 9: Delete brainstorm/plan scaffolding**
+
+Per CLAUDE.md convention — these are temporary scaffolding, not part of the repo.
+
+```bash
+rm -rf docs/superpowers/
+git add docs/superpowers/
+git commit -m "chore: remove brainstorm/plan scaffolding"
+```
+
 ---
 
 ## Self-Review
 
 **Spec coverage check:**
-- ✅ `proxied-claude`: ACTIVE_DIR removed, ln block removed, safety net added, comment updated — Tasks 4
-- ✅ `claude-proxy`: ACTIVE_DIR removed, write_active simplified, _sync-active-dir removed, ensure_default_profile updated, profile create updated, print_help updated, status updated, uninstall updated — Task 3
+- ✅ `proxied-claude`: ACTIVE_DIR removed, ln block removed + comment, safety net added — Task 4
+- ✅ `claude-proxy`: ACTIVE_DIR removed, write_active simplified + comment updated, _sync-active-dir removed, ensure_default_profile updated, profile create updated, print_help updated, status updated, uninstall updated — Task 3
 - ✅ `install.sh`: _sync-active-dir replaced, mkdir ide added, IDE hint updated — Task 5
 - ✅ `proxied-claude.bats`: 5 old tests removed, 5 new tests added — Tasks 1–2
 - ✅ `CLAUDE.md`, `CHANGELOG.md`, `README.md`, `TODO.md` — Task 6
+- ✅ `docs/superpowers/` deleted after implementation — Task 6 Step 9
 - ✅ `profile rename`: no changes needed (mv preserves symlinks) — confirmed in spec
 
 **No placeholders found.**
