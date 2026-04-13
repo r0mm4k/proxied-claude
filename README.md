@@ -6,7 +6,7 @@ Run [Claude Code](https://docs.anthropic.com/en/docs/claude-code) behind a **cor
 ![requires Homebrew](https://img.shields.io/badge/requires-Homebrew-orange)
 ![Claude Code](https://img.shields.io/badge/Claude-Code-blueviolet)
 ![License MIT](https://img.shields.io/badge/license-MIT-green)
-![Version](https://img.shields.io/badge/version-2.1.0-blue)
+![Version](https://img.shields.io/github/v/release/r0mm4k/proxied-claude)
 
 > ⚠️ Independent community tool — not affiliated with or endorsed by Anthropic.
 > You need your own Claude subscription.
