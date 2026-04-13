@@ -19,8 +19,23 @@ SCRIPT_VERSION="2.0.0"
 WRAPPER_PATH="/usr/local/bin/proxied-claude"
 CTL_PATH="/usr/local/bin/claude-proxy"
 CONF_DIR="$HOME/.config/proxied-claude"
-REPO_RAW="${REPO_RAW:-https://raw.githubusercontent.com/r0mm4k/proxied-claude/${VERSION:-main}}"
 IS_UPGRADE="${PROXIED_CLAUDE_UPGRADE:-0}"
+
+# Resolve VERSION to latest release if not pinned and REPO_RAW not overridden.
+# NOTE: identical fetch logic exists in claude-proxy cmd_update — keep both in sync if the API path changes.
+if [[ -z "${VERSION:-}" && -z "${REPO_RAW:-}" ]]; then
+  _fetched_version="$(curl -fsSL --proto '=https' --tlsv1.2 \
+    "https://api.github.com/repos/r0mm4k/proxied-claude/releases/latest" \
+    2>/dev/null \
+    | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])" 2>/dev/null \
+    || true)"
+  [[ -n "$_fetched_version" ]] && VERSION="$_fetched_version"
+fi
+REPO_RAW="${REPO_RAW:-https://raw.githubusercontent.com/r0mm4k/proxied-claude/${VERSION:-main}}"
+
+# Version actually being installed (strip v prefix for display)
+_install_version="${VERSION:+${VERSION#v}}"
+_install_version="${_install_version:-$SCRIPT_VERSION}"
 
 die()  { echo "ERROR: $*" >&2; exit 1; }
 step() { echo; echo "── $* ──"; }
@@ -35,9 +50,9 @@ validate_name() {
 }
 
 if [[ "$IS_UPGRADE" == "1" ]]; then
-  echo "== proxied-claude upgrade v$SCRIPT_VERSION =="
+  echo "== proxied-claude upgrade v${_install_version} =="
 else
-  echo "== proxied-claude installer v$SCRIPT_VERSION =="
+  echo "== proxied-claude installer v${_install_version} =="
 fi
 
 # ── 1. Claude binary ────────────────────────────────────────────────────────
@@ -111,6 +126,7 @@ fi
 # Migrate profile ide/ dirs to shared symlinks (idempotent)
 shopt -s nullglob
 for _pf in "$CONF_DIR/profiles"/*.conf; do
+  # read_conf is not available here (install.sh is standalone); this grep+cut mirrors its behaviour.
   _pdir="$(grep -m1 "^PROFILE_CLAUDE_DIR=" "$_pf" 2>/dev/null | cut -d'"' -f2)"
   [[ -n "$_pdir" && -d "$_pdir" ]] || continue
   [[ -L "$_pdir/ide" ]] || { rm -rf "$_pdir/ide"; ln -s "$CONF_DIR/ide" "$_pdir/ide"; }
@@ -123,7 +139,7 @@ if [[ "$IS_UPGRADE" == "1" ]]; then
   echo ""
   ok "Upgrade complete. All your profiles and proxies are unchanged."
   echo ""
-  echo "Version : $SCRIPT_VERSION"
+  echo "Version : $_install_version"
   echo "Help    : claude-proxy help"
   exit 0
 fi
@@ -169,7 +185,7 @@ fi
 # ── Done ────────────────────────────────────────────────────────────────────
 
 echo ""
-ok "Installation complete! v$SCRIPT_VERSION"
+ok "Installation complete! v$_install_version"
 echo ""
 echo "Run 'hash -r' or open a new terminal if commands aren't found yet."
 echo ""

@@ -1093,14 +1093,14 @@ EOF
 }
 
 cmd_update() {
-  local _target_version=""
+  local _target_version="" _label="Latest"
 
   # Parse args
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --version)
         [[ -n "${2:-}" ]] || die "Usage: claude-proxy update --version <tag> (e.g. v2.1.0)"
-        _target_version="$2"; shift 2 ;;
+        _target_version="${2#v}"; _target_version="v${_target_version}"; _label="Target"; shift 2 ;;
       *)
         die "Unknown option: $1
 Usage: claude-proxy update [--version <tag>]" ;;
@@ -1109,7 +1109,8 @@ Usage: claude-proxy update [--version <tag>]" ;;
 
   require_interactive
 
-  # Fetch latest release from GitHub if no version pinned
+  # Fetch latest release from GitHub if no version pinned.
+  # NOTE: identical fetch logic exists in install.sh — keep both in sync if the API path changes.
   if [[ -z "$_target_version" ]]; then
     local _fetched
     _fetched="$(curl -fsSL --proto '=https' --tlsv1.2 \
@@ -1135,7 +1136,7 @@ Usage: claude-proxy update [--version <tag>]" ;;
   echo ""
   if [[ -n "$_target_version" ]]; then
     echo "  Installed : $_installed"
-    echo "  Latest    : $_target_version"
+    echo "  $_label    : $_target_version"
     echo ""
 
     # Major version bump warning
@@ -1149,7 +1150,23 @@ Usage: claude-proxy update [--version <tag>]" ;;
       echo ""
     fi
 
-    read -r -p "Upgrade to $_target_version? [y/N] " _confirm
+    # Detect direction: downgrade if new major.minor.patch < installed
+    local _inst_ver _new_ver _prompt_verb
+    _inst_ver="${VERSION}"
+    _new_ver="${_target_version#v}"
+    if [[ "$_new_ver" == "$_inst_ver" ]]; then
+      _prompt_verb="Reinstall"
+    else
+      # Compare semver: downgrade if new < installed
+      local _lo
+      _lo="$(printf '%s\n%s\n' "$_inst_ver" "$_new_ver" | sort -V | head -1)"
+      if [[ "$_lo" == "$_new_ver" && "$_new_ver" != "$_inst_ver" ]]; then
+        _prompt_verb="Downgrade"
+      else
+        _prompt_verb="Upgrade"
+      fi
+    fi
+    read -r -p "$_prompt_verb to $_target_version? [y/N] " _confirm
   else
     read -r -p "Upgrade to latest (main branch)? [y/N] " _confirm
   fi
@@ -1163,7 +1180,7 @@ Usage: claude-proxy update [--version <tag>]" ;;
   _TMP="$(mktemp)"
   trap 'rm -f "$_TMP"' EXIT
   curl -fsSL --proto '=https' --tlsv1.2 \
-    "https://raw.githubusercontent.com/r0mm4k/proxied-claude/main/install.sh" \
+    "https://raw.githubusercontent.com/r0mm4k/proxied-claude/${_target_version:-main}/install.sh" \
     -o "$_TMP"
   if [[ -n "$_target_version" ]]; then
     VERSION="$_target_version" PROXIED_CLAUDE_UPGRADE=1 bash "$_TMP"
