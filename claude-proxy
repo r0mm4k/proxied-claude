@@ -764,9 +764,8 @@ EOF
       require_profile "$old"
       [[ ! -f "$PROFILES_DIR/${new}.conf" ]] || die "Profile '$new' already exists."
 
-      local old_dir; old_dir="$(read_conf "$PROFILES_DIR/${old}.conf" PROFILE_CLAUDE_DIR)"
-      local proxy;   proxy="$(read_conf   "$PROFILES_DIR/${old}.conf" PROFILE_PROXY)"
-      old_dir="${old_dir:-$HOME/.claude-${old}}"
+      local old_dir; old_dir="$(profile_claude_dir "$old")"
+      local proxy;   proxy="$(read_conf "$PROFILES_DIR/${old}.conf" PROFILE_PROXY)"
 
       local new_dir
       if [[ "$old_dir" == "$HOME/.claude-${old}" ]]; then
