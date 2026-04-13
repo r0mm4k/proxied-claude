@@ -50,7 +50,7 @@ Planned improvements for future iterations.
   `__CLAUDE_BIN__` patch, config dir, profile dirs, proxy confs, Keychain entries,
   active profile validity.
 
-- [ ] 6. **`claude-proxy update --version <n>`** — pin to a specific release instead of
+- [x] 6. **`claude-proxy update --version <n>`** — pin to a specific release instead of
   always pulling `main`. Two-part change:
   - `install.sh`: respect `VERSION` env var to set `REPO_RAW` to a tagged ref instead of `main`
   - `claude-proxy update --version <n>`: pass `VERSION=<n>` when invoking `install.sh`
@@ -182,7 +182,7 @@ Planned improvements for future iterations.
   Useful in the install wizard too: currently `install.sh` asks about proxy separately after
   profile creation. With this flag the wizard could pass it directly.
 
-- [ ] 25. **`claude-proxy update` — confirmation + version preview** — currently updates
+- [x] 25. **`claude-proxy update` — confirmation + version preview** — currently updates
   silently without showing what version is being installed or asking for confirmation.
   Improvements:
   - Before downloading: fetch and display the new version number, ask `Upgrade to vX.Y.Z? [y/N]`
