@@ -36,7 +36,7 @@ set -euo pipefail
 #   claude-proxy uninstall       → remove everything
 # ─────────────────────────────────────────────────────────────────────────────
 
-VERSION="2.1.0"
+VERSION="2.1.1"
 
 CONF_DIR="$HOME/.config/proxied-claude"
 PROFILES_DIR="$CONF_DIR/profiles"
@@ -170,7 +170,7 @@ mcp_has_conflict() {
 import json, sys
 def has_mcp(p): return bool(json.load(open(p)).get('mcpServers'))
 sys.exit(0 if has_mcp(sys.argv[1]) and has_mcp(sys.argv[2]) else 1)
-" "$1" "$2" 2>/dev/null
+" "$1" "$2" </dev/null 2>/dev/null
 }
 
 # Copies mcpServers from src .claude.json into dst .claude.json (creates dst if absent).
@@ -183,7 +183,7 @@ if not src_mcp: sys.exit(1)
 dst = json.load(open(sys.argv[2])) if os.path.exists(sys.argv[2]) else {}
 dst['mcpServers'] = src_mcp
 open(sys.argv[2], 'w').write(json.dumps(dst, indent=2) + '\n')
-" "$1" "$2" 2>/dev/null
+" "$1" "$2" </dev/null 2>/dev/null
 }
 
 do_copy_settings() {
@@ -244,6 +244,7 @@ do_copy_settings() {
       echo ""
       read -r -p "  Overwrite? [y/N] " _confirm
       [[ "${_confirm:-}" =~ ^[Yy]$ ]] || return 0
+      echo ""
     else
       die "${#conflicts[@]} conflicting item(s) in '$dst_label'. Run interactively to confirm overwrite."
     fi
@@ -579,6 +580,7 @@ EOF
           else
             _login_note="Note: If your session expired, log in again when you first use this profile"
           fi
+          echo ""
         else
           warn "Directory $claude_dir already exists and contains data — using as-is"
           _login_note="Note: If your session expired, log in again when you first use this profile"
@@ -632,6 +634,7 @@ EOF
         echo ""
         read -r -p "  Set '$name' as active profile now? [Y/n] " _activate
         if [[ ! "${_activate:-}" =~ ^[Nn]$ ]]; then
+          echo ""
           lock_acquire
           write_active "$name"
           lock_release
@@ -914,6 +917,7 @@ EOF
         require_interactive
         read -r -p "Delete anyway? [y/N] " _confirm
         [[ "${_confirm:-}" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 0; }
+        echo ""
         # Unlink from all profiles before deleting
         unlink_proxy_from_profiles "$name"
       fi
