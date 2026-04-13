@@ -32,6 +32,7 @@ Establish a repeatable, low-friction release process:
 cliff.toml
 .github/workflows/ci.yml
 .github/workflows/release.yml
+CONTRIBUTING.md
 ```
 
 ### `cliff.toml`
@@ -147,6 +148,17 @@ git push origin main --tags
 | #18 GitHub Actions | `ci.yml` is delivered here |
 | #21 shellcheck | `lint` job in `ci.yml` |
 | #25 version preview | `claude-proxy update` can fetch `/releases/latest` to show current version |
+
+---
+
+### `CONTRIBUTING.md`
+
+Developer-facing doc covering:
+- **Git flow:** feature branches → PR → merge to main
+- **Commit conventions:** conventional commits with examples (`feat:`, `fix:`, `docs:`, etc.)
+- **Running tests locally:** `bats proxied-claude.bats`, shellcheck commands
+- **Release process:** the 4-step workflow (update VERSION → cliff → commit → tag + push)
+- **Note on VERSION:** must be updated manually in `claude-proxy` before each release
 
 ---
 
