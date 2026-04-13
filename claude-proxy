@@ -32,7 +32,8 @@ set -euo pipefail
 #   claude-proxy version / --version / -v
 #   claude-proxy help / --help / -h
 #   claude-proxy migrate         → migrate from v1 proxy.conf
-#   claude-proxy update          → update to latest from GitHub
+#   claude-proxy update [--version <tag>]  → update to latest release (preview + confirmation)
+#   claude-proxy update --version v2.0.0  → install a specific release
 #   claude-proxy uninstall       → remove everything
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -485,7 +486,7 @@ Shortcuts:
   claude-proxy version        → print version
   claude-proxy help           → show this help
   claude-proxy migrate        → migrate from v1 proxy.conf
-  claude-proxy update         → update to latest from GitHub
+  claude-proxy update         → update to latest release (with preview and confirmation)
   claude-proxy uninstall      → remove everything
 
 IDE integration (JetBrains / VS Code):

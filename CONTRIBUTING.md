@@ -87,6 +87,12 @@ Requires: `brew install git-cliff`
 
 GitHub Actions picks up the tag and creates the GitHub Release with generated release notes.
 
+Users can then upgrade with:
+```bash
+claude-proxy update                    # installs latest release (with preview)
+claude-proxy update --version v2.1.0   # pin to a specific release
+```
+
 ### Version Bump Guidelines
 
 Following [Semantic Versioning](https://semver.org/):
