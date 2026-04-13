@@ -1124,7 +1124,7 @@ Pin a version explicitly:
 
   # Already up to date?
   local _installed="v$VERSION"
-  if [[ -n "$_target_version" && "$_installed" == "$_target_version" ]]; then
+  if [[ "$_installed" == "$_target_version" ]]; then
     echo "Already up to date: $_installed"
     return 0
   fi
@@ -1147,19 +1147,12 @@ Pin a version explicitly:
   fi
 
   # Detect direction: downgrade if new < installed
-  local _inst_ver _new_ver _prompt_verb
-  _inst_ver="${VERSION}"
-  _new_ver="${_target_version#v}"
-  if [[ "$_new_ver" == "$_inst_ver" ]]; then
-    _prompt_verb="Reinstall"
+  local _lo _prompt_verb
+  _lo="$(printf '%s\n%s\n' "${VERSION}" "${_target_version#v}" | sort -V | head -1)"
+  if [[ "$_lo" == "${_target_version#v}" ]]; then
+    _prompt_verb="Downgrade"
   else
-    local _lo
-    _lo="$(printf '%s\n%s\n' "$_inst_ver" "$_new_ver" | sort -V | head -1)"
-    if [[ "$_lo" == "$_new_ver" && "$_new_ver" != "$_inst_ver" ]]; then
-      _prompt_verb="Downgrade"
-    else
-      _prompt_verb="Upgrade"
-    fi
+    _prompt_verb="Upgrade"
   fi
   read -r -p "$_prompt_verb to $_target_version? [y/N] " _confirm
   [[ "${_confirm:-}" =~ ^[Yy]$ ]] || { echo "Aborted."; return 0; }
