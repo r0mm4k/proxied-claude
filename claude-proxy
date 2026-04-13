@@ -1133,42 +1133,37 @@ Pin a version explicitly:
 
   # Version preview
   echo ""
-  if [[ -n "$_target_version" ]]; then
-    echo "  Installed : $_installed"
-    echo "  $_label    : $_target_version"
+  echo "  Installed : $_installed"
+  echo "  $_label    : $_target_version"
+  echo ""
+
+  # Major version bump warning
+  local _inst_major _new_major
+  _inst_major="${VERSION%%.*}"
+  _new_major="${_target_version#v}"; _new_major="${_new_major%%.*}"
+  if [[ "$_new_major" =~ ^[0-9]+$ && "$_inst_major" =~ ^[0-9]+$ && "$_new_major" -gt "$_inst_major" ]]; then
+    warn "Major version upgrade ($_installed → $_target_version)."
+    echo "   Review release notes before upgrading:"
+    echo "   https://github.com/r0mm4k/proxied-claude/releases/tag/${_target_version}"
     echo ""
-
-    # Major version bump warning
-    local _inst_major _new_major
-    _inst_major="${VERSION%%.*}"
-    _new_major="${_target_version#v}"; _new_major="${_new_major%%.*}"
-    if [[ "$_new_major" =~ ^[0-9]+$ && "$_inst_major" =~ ^[0-9]+$ && "$_new_major" -gt "$_inst_major" ]]; then
-      warn "Major version upgrade ($_installed → $_target_version)."
-      echo "   Review release notes before upgrading:"
-      echo "   https://github.com/r0mm4k/proxied-claude/releases/tag/${_target_version}"
-      echo ""
-    fi
-
-    # Detect direction: downgrade if new major.minor.patch < installed
-    local _inst_ver _new_ver _prompt_verb
-    _inst_ver="${VERSION}"
-    _new_ver="${_target_version#v}"
-    if [[ "$_new_ver" == "$_inst_ver" ]]; then
-      _prompt_verb="Reinstall"
-    else
-      # Compare semver: downgrade if new < installed
-      local _lo
-      _lo="$(printf '%s\n%s\n' "$_inst_ver" "$_new_ver" | sort -V | head -1)"
-      if [[ "$_lo" == "$_new_ver" && "$_new_ver" != "$_inst_ver" ]]; then
-        _prompt_verb="Downgrade"
-      else
-        _prompt_verb="Upgrade"
-      fi
-    fi
-    read -r -p "$_prompt_verb to $_target_version? [y/N] " _confirm
-  else
-    read -r -p "Upgrade to latest (main branch)? [y/N] " _confirm
   fi
+
+  # Detect direction: downgrade if new < installed
+  local _inst_ver _new_ver _prompt_verb
+  _inst_ver="${VERSION}"
+  _new_ver="${_target_version#v}"
+  if [[ "$_new_ver" == "$_inst_ver" ]]; then
+    _prompt_verb="Reinstall"
+  else
+    local _lo
+    _lo="$(printf '%s\n%s\n' "$_inst_ver" "$_new_ver" | sort -V | head -1)"
+    if [[ "$_lo" == "$_new_ver" && "$_new_ver" != "$_inst_ver" ]]; then
+      _prompt_verb="Downgrade"
+    else
+      _prompt_verb="Upgrade"
+    fi
+  fi
+  read -r -p "$_prompt_verb to $_target_version? [y/N] " _confirm
   [[ "${_confirm:-}" =~ ^[Yy]$ ]] || { echo "Aborted."; return 0; }
 
   # Install
@@ -1179,13 +1174,9 @@ Pin a version explicitly:
   _TMP="$(mktemp)"
   trap 'rm -f "$_TMP"' EXIT
   curl -fsSL --proto '=https' --tlsv1.2 \
-    "https://raw.githubusercontent.com/r0mm4k/proxied-claude/${_target_version:-main}/install.sh" \
+    "https://raw.githubusercontent.com/r0mm4k/proxied-claude/${_target_version}/install.sh" \
     -o "$_TMP"
-  if [[ -n "$_target_version" ]]; then
-    VERSION="$_target_version" PROXIED_CLAUDE_UPGRADE=1 bash "$_TMP"
-  else
-    PROXIED_CLAUDE_UPGRADE=1 bash "$_TMP"
-  fi
+  VERSION="$_target_version" PROXIED_CLAUDE_UPGRADE=1 bash "$_TMP"
 }
 
 # ── Top-level dispatch ───────────────────────────────────────────────────────
