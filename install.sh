@@ -90,14 +90,12 @@ trap 'rm -f "$TMP_WRAPPER" "$TMP_CTL"' EXIT
 curl -fsSL --proto '=https' --tlsv1.2 "${REPO_RAW}/proxied-claude" -o "$TMP_WRAPPER"
 sed "s@CLAUDE_BIN=\"__CLAUDE_BIN__\"@CLAUDE_BIN=\"${CLAUDE_BIN}\"@" "$TMP_WRAPPER" > "${TMP_WRAPPER}.patched"
 mv "${TMP_WRAPPER}.patched" "$TMP_WRAPPER"
-sudo cp "$TMP_WRAPPER" "$WRAPPER_PATH"
-sudo chmod +x "$WRAPPER_PATH"
+sudo install -m 755 "$TMP_WRAPPER" "$WRAPPER_PATH"
 ok "$WRAPPER_PATH"
 
 step "Installing claude-proxy (sudo required)"
 curl -fsSL --proto '=https' --tlsv1.2 "${REPO_RAW}/claude-proxy" -o "$TMP_CTL"
-sudo cp "$TMP_CTL" "$CTL_PATH"
-sudo chmod +x "$CTL_PATH"
+sudo install -m 755 "$TMP_CTL" "$CTL_PATH"
 ok "$CTL_PATH"
 
 # ── 4. Migrate v1 config if present ────────────────────────────────────────
@@ -150,11 +148,11 @@ step "Initial setup (optional — press Enter to skip)"
 echo "   Tip: you can skip this entirely — the 'default' profile (~/.claude) is ready to use."
 echo ""
 
-read -r -p "Set up a proxy for the 'default' profile? [y/N] " _do_default_proxy
+printf '%s' "Set up a proxy for the 'default' profile? [y/N] " >&2; read -r _do_default_proxy
 if [[ "${_do_default_proxy:-}" =~ ^[Yy]$ ]]; then
-  read -r -p "Proxy name (e.g. corp-lt): " _def_proxy_name
-  read -r -p "Proxy host (IP:PORT):      " _def_proxy_host
-  read -r -p "Proxy user:                " _def_proxy_user
+  printf '%s' "Proxy name (e.g. corp-lt): " >&2; read -r _def_proxy_name
+  printf '%s' "Proxy host (IP:PORT):      " >&2; read -r _def_proxy_host
+  printf '%s' "Proxy user:                " >&2; read -r _def_proxy_user
 
   _valid=true
   validate_name "${_def_proxy_name:-}" || { warn "Invalid proxy name — skipping"; _valid=false; }
@@ -170,9 +168,9 @@ if [[ "${_do_default_proxy:-}" =~ ^[Yy]$ ]]; then
 fi
 echo ""
 
-read -r -p "Create an additional profile now? [y/N] " _do_profile
+printf '%s' "Create an additional profile now? [y/N] " >&2; read -r _do_profile
 if [[ "${_do_profile:-}" =~ ^[Yy]$ ]]; then
-  read -r -p "Profile name (e.g. work, personal): " _profile_name
+  printf '%s' "Profile name (e.g. work, personal): " >&2; read -r _profile_name
 
   if ! validate_name "${_profile_name:-}"; then
     warn "Invalid name '${_profile_name:-}' — only letters, digits, - and _ allowed. Skipping."
@@ -183,11 +181,11 @@ if [[ "${_do_profile:-}" =~ ^[Yy]$ ]]; then
     # Delegate to claude-proxy — it handles settings copy interactively
     "$CTL_PATH" profile create "$_profile_name"
 
-    read -r -p "Add a proxy for '$_profile_name'? [y/N] " _do_proxy
+    printf '%s' "Add a proxy for '$_profile_name'? [y/N] " >&2; read -r _do_proxy
     if [[ "${_do_proxy:-}" =~ ^[Yy]$ ]]; then
-      read -r -p "Proxy name (e.g. corp-lt): " _proxy_name
-      read -r -p "Proxy host (IP:PORT):      " _proxy_host
-      read -r -p "Proxy user:                " _proxy_user
+      printf '%s' "Proxy name (e.g. corp-lt): " >&2; read -r _proxy_name
+      printf '%s' "Proxy host (IP:PORT):      " >&2; read -r _proxy_host
+      printf '%s' "Proxy user:                " >&2; read -r _proxy_user
 
       _valid=true
       validate_name "${_proxy_name:-}" || { warn "Invalid proxy name — skipping"; _valid=false; }
