@@ -157,6 +157,16 @@ Planned improvements for future iterations.
   `settings.json` would not be rewritten. Needs passing `src_dir` into sed instead of
   relying on the fixed `~/.claude*` pattern.
 
+- [ ] 29. **`profile create` copy-settings — validate input name** — `claude-proxy:607`
+  the user-typed profile name in the interactive copy-settings prompt is checked only via
+  `[[ -f "$PROFILES_DIR/${_choice}.conf" ]]`. `validate_name` is not called, so a name with
+  special characters gets a silent "not found" warning instead of a clear error. No security
+  risk (file only read, never executed), but inconsistent with the rest of the codebase.
+
+- [ ] 30. **`uninstall` — mention `~/.claude.json` in "Will NOT delete" list** — `claude-proxy:1206`
+  the message reads `Will NOT delete: ~/.claude  ~/.claude-*` but omits `~/.claude.json`
+  (the default profile's auth/config file at `$HOME`). Users manually cleaning up may miss it.
+
 - [ ] 16. **`proxy check` — `nc` without curl fallback** — `cmd_proxy check` uses `nc -z -w 5`
   with no fallback. The old `install.sh` check had a curl fallback. On macOS `nc` is always
   present so this is low-risk, but worth revisiting if Linux support (TODO #23) is added.
@@ -193,6 +203,12 @@ Planned improvements for future iterations.
 
 ## Security
 
+- [ ] 28. **URL-encode proxy password in proxy URL** — `proxied-claude:102`, `claude-proxy:991`
+  construct `http://user:pass@host` without encoding the password. A password containing
+  `@`, `:`, or `/` produces a malformed URL that silently breaks connectivity with no error
+  message. Fix: add a `url_encode_pass()` helper (~15 lines of pure bash) and apply it to
+  the password before interpolation in both files.
+
 - [ ] 17. **`install.sh` — checksum verification** — the installer downloads binaries via
   `curl --proto '=https' --tlsv1.2` but does not verify content hashes. For a tool that
   stores credentials, a `sha256sum` check against a published `SHA256SUMS` file would
@@ -203,7 +219,7 @@ Planned improvements for future iterations.
 
 ## CI / DX
 
-- [ ] 18. **GitHub Actions** — auto-run `bats proxied-claude.bats` on push and pull requests.
+- [x] 18. **GitHub Actions** — auto-run `bats proxied-claude.bats` on push and pull requests.
 
 - [ ] 19. **Shell completions (zsh / bash)** — tab-complete subcommands, profile names,
   and proxy names.
@@ -220,11 +236,11 @@ Planned improvements for future iterations.
   ```
   Update `bats` invocation in README and GitHub Actions accordingly.
 
-- [ ] 21. **Shellcheck linting in CI** — add a shellcheck step to GitHub Actions alongside
+- [x] 21. **Shellcheck linting in CI** — add a shellcheck step to GitHub Actions alongside
   the bats tests. Catches common shell pitfalls (quoting, word splitting, deprecated syntax)
   across `proxied-claude`, `claude-proxy`, and `install.sh`.
 
-- [ ] 22. **GitHub Releases with version tags** — publish tagged releases (`v2.0.0`, `v2.1.0`)
+- [x] 22. **GitHub Releases with version tags** — publish tagged releases (`v2.0.0`, `v2.1.0`)
   so the `update` command can pin to a specific version (TODO #6) and users can audit what
   they're installing.
 
