@@ -67,7 +67,7 @@ chmod +x ./install.sh
 ```
 
 The installer:
-1. Installs Claude Code via Homebrew if not present
+1. Installs Claude Code via `brew install --cask claude-code` if not present
 2. Installs `/usr/local/bin/proxied-claude` — the wrapper
 3. Installs `/usr/local/bin/claude-proxy` — the control utility
 4. **Auto-migrates** any existing v1 config (`proxy.conf`) — your proxy settings and Keychain password are preserved automatically

@@ -49,7 +49,7 @@ if command -v claude >/dev/null 2>&1; then
 else
   echo "Claude not found — installing via Homebrew..."
   command -v brew >/dev/null 2>&1 || die "Homebrew not found. Install: https://brew.sh"
-  brew install claude
+  brew install --cask claude-code
   CLAUDE_BIN="$(command -v claude)"
 fi
 # Prefer canonical Homebrew path on Apple Silicon
