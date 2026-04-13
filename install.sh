@@ -15,7 +15,7 @@ set -euo pipefail
 #   PROXIED_CLAUDE_UPGRADE=1 bash install.sh
 # ─────────────────────────────────────────────────────────────────────────────
 
-VERSION="2.0.0"
+SCRIPT_VERSION="2.0.0"
 WRAPPER_PATH="/usr/local/bin/proxied-claude"
 CTL_PATH="/usr/local/bin/claude-proxy"
 CONF_DIR="$HOME/.config/proxied-claude"
@@ -35,9 +35,9 @@ validate_name() {
 }
 
 if [[ "$IS_UPGRADE" == "1" ]]; then
-  echo "== proxied-claude upgrade v$VERSION =="
+  echo "== proxied-claude upgrade v$SCRIPT_VERSION =="
 else
-  echo "== proxied-claude installer v$VERSION =="
+  echo "== proxied-claude installer v$SCRIPT_VERSION =="
 fi
 
 # ── 1. Claude binary ────────────────────────────────────────────────────────
@@ -123,7 +123,7 @@ if [[ "$IS_UPGRADE" == "1" ]]; then
   echo ""
   ok "Upgrade complete. All your profiles and proxies are unchanged."
   echo ""
-  echo "Version : $VERSION"
+  echo "Version : $SCRIPT_VERSION"
   echo "Help    : claude-proxy help"
   exit 0
 fi
@@ -169,7 +169,7 @@ fi
 # ── Done ────────────────────────────────────────────────────────────────────
 
 echo ""
-ok "Installation complete! v$VERSION"
+ok "Installation complete! v$SCRIPT_VERSION"
 echo ""
 echo "Run 'hash -r' or open a new terminal if commands aren't found yet."
 echo ""

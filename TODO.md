@@ -181,6 +181,12 @@ Planned improvements for future iterations.
   - `claude-proxy version --check` (or hint in `claude-proxy status`): compare installed
     version against latest on GitHub and show a hint if an update is available — without
     blocking or auto-fetching on every run (only on explicit `version` / `status` call)
+  - `claude-proxy update` should install the latest **tagged release** (via GitHub API
+    `/releases/latest`), not HEAD of `main` — currently tying to `main` means users
+    may receive unreleased code between releases
+  - User-facing `VERSION` env var for pinned installs requires the `v` prefix
+    (e.g. `VERSION=v2.0.0`), matching the git tag format; `SCRIPT_VERSION` in
+    `install.sh` is the display-only version and must never collide with `VERSION`
   - Depends on: #22 (GitHub Releases, where version info and release notes are published)
 
 ---
