@@ -2134,3 +2134,18 @@ run_validate() {
 @test "update: abort path present in source (structural)" {
   grep -q "Aborted" "$(dirname "$BATS_TEST_FILENAME")/claude-proxy"
 }
+
+@test "update: major version warning shown at runtime" {
+  _define_helpers
+  VERSION="2.0.0"
+  require_interactive() { :; }
+  curl() {
+    [[ "$*" == *api.github.com* ]] && echo '{"tag_name":"v3.0.0"}' || true
+  }
+  local _out; _out="$(mktemp)"
+  printf 'n\n' | cmd_update > "$_out" 2>&1 || true
+  local _captured; _captured="$(cat "$_out")"; rm -f "$_out"
+  [[ "$_captured" == *"Major version upgrade"* ]]
+  [[ "$_captured" == *"v3.0.0"* ]]
+  [[ "$_captured" == *"Aborted"* ]]
+}
