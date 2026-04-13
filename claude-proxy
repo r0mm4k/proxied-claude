@@ -1289,7 +1289,7 @@ case "$cmd" in
     for f in "$PROXIES_DIR"/*.conf; do
       _u="$(read_conf "$f" PROXY_USER)"
       _s="$(read_conf "$f" PROXY_KEYCHAIN_SERVICE)"
-      _s="${_s:-claude-proxy:$(basename "$f" .conf)}"
+      _s="${_s:-$(keychain_service "$(basename "$f" .conf)")}"
       security delete-generic-password -a "${_u:-}" -s "$_s" >/dev/null 2>&1 && \
         info "Keychain removed: $_s" || true
     done
