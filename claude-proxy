@@ -36,7 +36,7 @@ set -euo pipefail
 #   claude-proxy uninstall       → remove everything
 # ─────────────────────────────────────────────────────────────────────────────
 
-VERSION="2.1.3"
+VERSION="2.1.4"
 
 CONF_DIR="$HOME/.config/proxied-claude"
 PROFILES_DIR="$CONF_DIR/profiles"
@@ -242,7 +242,7 @@ do_copy_settings() {
       warn "${#conflicts[@]} item(s) already exist in '$dst_label' and will be overwritten:"
       for c in "${conflicts[@]}"; do info "  $c"; done
       echo ""
-      read -r -p "  Overwrite? [y/N] " _confirm
+      printf '%s' "  Overwrite? [y/N] " >&2; read -r _confirm
       _confirm="${_confirm%$'\r'}"
       [[ "${_confirm:-}" =~ ^[Yy]$ ]] || return 0
       echo ""
@@ -575,7 +575,7 @@ EOF
           echo "  Your previous session data and settings are preserved."
           echo ""
           local _fresh=""
-          read -r -p "  Start fresh and delete existing data? [y/N] " _fresh
+          printf '%s' "  Start fresh and delete existing data? [y/N] " >&2; read -r _fresh
           _fresh="${_fresh%$'\r'}"
           if [[ "${_fresh:-}" =~ ^[Yy]$ ]]; then
             rm -rf "$claude_dir"
@@ -616,13 +616,13 @@ EOF
           for c in "${candidates[@]}"; do printf "    %s\n" "$c"; done
           echo "    (skip)"
           echo ""
-          read -r -p "  Copy settings from profile? [profile name or Enter to skip]: " _choice
+          printf '%s' "  Copy settings from profile? [profile name or Enter to skip]: " >&2; read -r _choice
           _choice="${_choice%$'\r'}"
           if [[ -n "$_choice" && "$_choice" != "skip" ]]; then
             if [[ -f "$PROFILES_DIR/${_choice}.conf" ]]; then
               local src_dir; src_dir="$(profile_claude_dir "$_choice")"
               local _inc_proj=0
-              read -r -p "  Copy projects too? [y/N] " _proj_choice
+              printf '%s' "  Copy projects too? [y/N] " >&2; read -r _proj_choice
               _proj_choice="${_proj_choice%$'\r'}"
               [[ "${_proj_choice:-}" =~ ^[Yy]$ ]] && _inc_proj=1
               do_copy_settings "$src_dir" "$claude_dir" "$_choice" "$name" "$_inc_proj"
@@ -636,7 +636,7 @@ EOF
       # Auto-activate (lock → write_active → release)
       if [[ -t 0 ]]; then
         echo ""
-        read -r -p "  Set '$name' as active profile now? [Y/n] " _activate
+        printf '%s' "  Set '$name' as active profile now? [Y/n] " >&2; read -r _activate
         _activate="${_activate%$'\r'}"
         if [[ ! "${_activate:-}" =~ ^[Nn]$ ]]; then
           echo ""
@@ -920,7 +920,7 @@ EOF
         warn "Proxy '$name' is used by profile(s): $used_by"
         warn "Those profiles will be unlinked and run without a proxy."
         require_interactive
-        read -r -p "Delete anyway? [y/N] " _confirm
+        printf '%s' "Delete anyway? [y/N] " >&2; read -r _confirm
         _confirm="${_confirm%$'\r'}"
         [[ "${_confirm:-}" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 0; }
         echo ""
@@ -1175,7 +1175,7 @@ Pin a version explicitly:
   else
     _prompt_verb="Upgrade"
   fi
-  read -r -p "$_prompt_verb to $_target_version? [y/N] " _confirm
+  printf '%s' "$_prompt_verb to $_target_version? [y/N] " >&2; read -r _confirm
   _confirm="${_confirm%$'\r'}"
   [[ "${_confirm:-}" =~ ^[Yy]$ ]] || { echo "Aborted."; return 0; }
 
@@ -1311,7 +1311,7 @@ case "$cmd" in
     echo "Will NOT delete: ~/.claude  ~/.claude-*  (your Claude account data)"
     echo ""
     require_interactive
-    read -r -p "Are you sure? [y/N] " _confirm
+    printf '%s' "Are you sure? [y/N] " >&2; read -r _confirm
     _confirm="${_confirm%$'\r'}"
     [[ "${_confirm:-}" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 0; }
 
