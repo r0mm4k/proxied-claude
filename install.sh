@@ -150,6 +150,26 @@ step "Initial setup (optional — press Enter to skip)"
 echo "   Tip: you can skip this entirely — the 'default' profile (~/.claude) is ready to use."
 echo ""
 
+read -r -p "Set up a proxy for the 'default' profile? [y/N] " _do_default_proxy
+if [[ "${_do_default_proxy:-}" =~ ^[Yy]$ ]]; then
+  read -r -p "Proxy name (e.g. corp-lt): " _def_proxy_name
+  read -r -p "Proxy host (IP:PORT):      " _def_proxy_host
+  read -r -p "Proxy user:                " _def_proxy_user
+
+  _valid=true
+  validate_name "${_def_proxy_name:-}" || { warn "Invalid proxy name — skipping"; _valid=false; }
+  [[ "${_def_proxy_host:-}" =~ ^[^:]+:[0-9]+$ ]] || \
+    { warn "Invalid host format (need hostname:PORT) — skipping"; _valid=false; }
+  [[ -n "${_def_proxy_user:-}" ]] || { warn "User cannot be empty — skipping"; _valid=false; }
+
+  if [[ "$_valid" == "true" ]]; then
+    "$CTL_PATH" proxy create "$_def_proxy_name" "$_def_proxy_host" "$_def_proxy_user"
+    "$CTL_PATH" profile set-proxy default "$_def_proxy_name"
+    ok "Proxy '$_def_proxy_name' linked to 'default'"
+  fi
+fi
+echo ""
+
 read -r -p "Create an additional profile now? [y/N] " _do_profile
 if [[ "${_do_profile:-}" =~ ^[Yy]$ ]]; then
   read -r -p "Profile name (e.g. work, personal): " _profile_name

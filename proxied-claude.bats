@@ -797,13 +797,13 @@ EOF
   [ "$output" = "0" ]
 }
 
-@test "copy-settings: shows login note on successful copy" {
+@test "copy-settings: shows copied confirmation on successful copy" {
   local src="$TEST_DIR/src" dst="$TEST_DIR/dst"
   mkdir -p "$src" "$dst"
   echo '{"theme":"dark"}' > "$src/settings.json"
   run do_copy_settings "$src" "$dst" "src" "dst"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"log in to Claude"* ]]
+  [[ "$output" == *"Settings copied"* ]]
 }
 
 @test "copy-settings: dies on conflict in non-interactive mode" {

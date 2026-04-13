@@ -317,7 +317,6 @@ do_copy_settings() {
     info "No settings found in '$src_label' (nothing copied)"
   else
     ok "Settings copied from '$src_label' → '$dst_label'"
-    info "Note: you still need to log in to Claude in the new profile"
   fi
 }
 
@@ -763,6 +762,7 @@ EOF
       local src_dir; src_dir="$(profile_claude_dir "$from_profile")"
       local dst_dir; dst_dir="$(profile_claude_dir "$name")"
       do_copy_settings "$src_dir" "$dst_dir" "$from_profile" "$name" "$include_projects"
+      info "Note: you still need to log in to Claude in the new profile"
       ;;
 
     rename)

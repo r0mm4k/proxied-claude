@@ -60,15 +60,9 @@ Requires: `brew install git-cliff`
 
 1. Ensure `main` is up to date and all tests pass locally
 
-2. Update version in two files:
-   - `VERSION` in `claude-proxy` (shown by `claude-proxy version`):
+2. Update version in `claude-proxy` (shown by `claude-proxy version`):
    ```bash
    grep -n '^VERSION=' claude-proxy
-   # edit that line
-   ```
-   - `SCRIPT_VERSION` in `install.sh` (shown in the installer banner):
-   ```bash
-   grep -n '^SCRIPT_VERSION=' install.sh
    # edit that line
    ```
 

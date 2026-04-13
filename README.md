@@ -78,9 +78,11 @@ The installer:
 3. Installs `/usr/local/bin/claude-proxy` — the control utility
 4. **Auto-migrates** any existing v1 config (`proxy.conf`) — your proxy settings and Keychain password are preserved automatically
 5. Creates a `default` profile pointing to `~/.claude` (if not already present)
-6. Optionally walks you through creating an additional profile and proxy
+6. Optionally walks you through setting up a proxy for the `default` profile and/or creating additional profiles
 
-> **Just want proxy without profiles?** Press Enter to skip the wizard. The `default` profile is created automatically and points to your existing `~/.claude` — everything works exactly as before, just with proxy support.
+> **Just want a proxy on the default profile?** Answer Y to the first wizard question to set one up, then press Enter to skip creating additional profiles.
+>
+> **Want to skip entirely?** Press Enter twice — the `default` profile points to your existing `~/.claude` and everything works as before.
 
 ---
 
