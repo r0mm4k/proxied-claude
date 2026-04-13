@@ -1118,11 +1118,10 @@ Usage: claude-proxy update [--version <tag>]" ;;
       2>/dev/null \
       | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])" 2>/dev/null \
       || true)"
-    if [[ -n "$_fetched" ]]; then
-      _target_version="$_fetched"
-    else
-      warn "Could not fetch latest version from GitHub. Installing from main branch."
-    fi
+    [[ -n "$_fetched" ]] || die "Could not fetch latest release from GitHub.
+Pin a version explicitly:
+  claude-proxy update --version vX.Y.Z"
+    _target_version="$_fetched"
   fi
 
   # Already up to date?

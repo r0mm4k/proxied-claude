@@ -15,7 +15,6 @@ set -euo pipefail
 #   PROXIED_CLAUDE_UPGRADE=1 bash install.sh
 # ─────────────────────────────────────────────────────────────────────────────
 
-SCRIPT_VERSION="2.0.0"
 WRAPPER_PATH="/usr/local/bin/proxied-claude"
 CTL_PATH="/usr/local/bin/claude-proxy"
 CONF_DIR="$HOME/.config/proxied-claude"
@@ -24,18 +23,21 @@ IS_UPGRADE="${PROXIED_CLAUDE_UPGRADE:-0}"
 # Resolve VERSION to latest release if not pinned and REPO_RAW not overridden.
 # NOTE: identical fetch logic exists in claude-proxy cmd_update — keep both in sync if the API path changes.
 if [[ -z "${VERSION:-}" && -z "${REPO_RAW:-}" ]]; then
-  _fetched_version="$(curl -fsSL --proto '=https' --tlsv1.2 \
+  VERSION="$(curl -fsSL --proto '=https' --tlsv1.2 \
     "https://api.github.com/repos/r0mm4k/proxied-claude/releases/latest" \
     2>/dev/null \
     | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])" 2>/dev/null \
     || true)"
-  [[ -n "$_fetched_version" ]] && VERSION="$_fetched_version"
+  if [[ -z "$VERSION" ]]; then
+    echo "ERROR: Could not fetch latest release from GitHub. Pin a version explicitly:" >&2
+    echo "  VERSION=vX.Y.Z bash <(curl -fsSL https://raw.githubusercontent.com/r0mm4k/proxied-claude/main/install.sh)" >&2
+    exit 1
+  fi
 fi
-REPO_RAW="${REPO_RAW:-https://raw.githubusercontent.com/r0mm4k/proxied-claude/${VERSION:-main}}"
+REPO_RAW="${REPO_RAW:-https://raw.githubusercontent.com/r0mm4k/proxied-claude/${VERSION}}"
 
-# Version actually being installed (strip v prefix for display)
-_install_version="${VERSION:+${VERSION#v}}"
-_install_version="${_install_version:-$SCRIPT_VERSION}"
+# Version being installed (strip v prefix for display)
+_install_version="${VERSION#v}"
 
 die()  { echo "ERROR: $*" >&2; exit 1; }
 step() { echo; echo "── $* ──"; }
