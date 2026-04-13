@@ -486,7 +486,8 @@ Shortcuts:
   claude-proxy version        → print version
   claude-proxy help           → show this help
   claude-proxy migrate        → migrate from v1 proxy.conf
-  claude-proxy update         → update to latest release (with preview and confirmation)
+  claude-proxy update [--version <tag>]  → update to latest release (preview + confirmation)
+  claude-proxy update --version v2.0.0  → install a specific release
   claude-proxy uninstall      → remove everything
 
 IDE integration (JetBrains / VS Code):
@@ -1143,7 +1144,7 @@ Usage: claude-proxy update [--version <tag>]" ;;
     local _inst_major _new_major
     _inst_major="${VERSION%%.*}"
     _new_major="${_target_version#v}"; _new_major="${_new_major%%.*}"
-    if [[ "$_new_major" -gt "$_inst_major" ]]; then
+    if [[ "$_new_major" =~ ^[0-9]+$ && "$_inst_major" =~ ^[0-9]+$ && "$_new_major" -gt "$_inst_major" ]]; then
       warn "Major version upgrade ($_installed → $_target_version)."
       echo "   Review release notes before upgrading:"
       echo "   https://github.com/r0mm4k/proxied-claude/releases/tag/${_target_version}"
