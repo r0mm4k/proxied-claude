@@ -2091,6 +2091,7 @@ run_validate() {
   }
   bash() { echo "BASH_CALLED: VERSION=$VERSION"; }
   run cmd_update
+  [ "$status" -eq 0 ]
   [[ "$output" == *"v2.0.0"* ]]
   [[ "$output" == *"v2.1.0"* ]]
 }
