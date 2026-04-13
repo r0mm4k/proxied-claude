@@ -425,7 +425,7 @@ If files already exist in the destination profile, a summary of conflicts is sho
 - Config files are parsed with `grep` — **never sourced as bash**. Values like `$(cmd)` are treated as literal strings.
 - `HTTPS_PROXY` (with password) is visible in `ps auxe` **while Claude is running** — acceptable on a personal Mac; be aware on shared machines.
 - Profile and proxy **names are validated** — only `[a-zA-Z0-9_-]` allowed, preventing path traversal.
-- The `update` command downloads from the `main` branch over HTTPS (`--proto '=https' --tlsv1.2`).
+- The `update` command downloads from the release tag (or `main` as fallback) over HTTPS (`--proto '=https' --tlsv1.2`).
 - Mutating commands use a **concurrency lock** to prevent race conditions.
 - Commands requiring input (passwords, confirmations) **fail fast** when stdin is not a terminal.
 
