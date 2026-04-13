@@ -1181,6 +1181,79 @@ Pin a version explicitly:
   VERSION="$_target_version" PROXIED_CLAUDE_UPGRADE=1 bash "$_TMP"
 }
 
+cmd_status() {
+  local _active; _active="$(active_profile)"
+  local _dir;    _dir="$(profile_claude_dir "$_active")"
+  local _proxy;  _proxy="$(read_conf "$PROFILES_DIR/${_active}.conf" PROFILE_PROXY)"
+  echo ""
+  echo "  ── Active profile ─────────────────────────────"
+  echo "  Profile    : $_active"
+  echo "  Claude dir : $(display_path "$_dir")"
+  echo "  Proxy      : ${_proxy:-(no proxy)}"
+  if [[ -n "$_proxy" ]]; then
+    local _pconf="$PROXIES_DIR/${_proxy}.conf"
+    if [[ -f "$_pconf" ]]; then
+      echo "  Host       : $(read_conf "$_pconf" PROXY_HOST)"
+      echo "  User       : $(read_conf "$_pconf" PROXY_USER)"
+    else
+      warn "Proxy '$_proxy' config is missing!"
+    fi
+  fi
+  echo ""
+  echo "  ── All profiles ───────────────────────────────"
+  shopt -s nullglob
+  local -a _pfiles=("$PROFILES_DIR"/*.conf)
+  shopt -u nullglob
+  if [[ ${#_pfiles[@]} -eq 0 ]]; then
+    echo "  (none)"
+  else
+    local _f _n _lp _marker
+    for _f in "${_pfiles[@]}"; do
+      _n="$(basename "$_f" .conf)"
+      _lp="$(read_conf "$_f" PROFILE_PROXY)"
+      _marker=""; [[ "$_n" == "$_active" ]] && _marker=" ◀"
+      printf "  %-20s  %s%s\n" "$_n" "${_lp:-(no proxy)}" "$_marker"
+    done
+  fi
+  echo ""
+  echo "  ── All proxies ────────────────────────────────"
+  shopt -s nullglob
+  local -a _xfiles=("$PROXIES_DIR"/*.conf)
+  shopt -u nullglob
+  if [[ ${#_xfiles[@]} -eq 0 ]]; then
+    echo "  (none)"
+  else
+    local _f _n _h _u
+    for _f in "${_xfiles[@]}"; do
+      _n="$(basename "$_f" .conf)"
+      _h="$(read_conf "$_f" PROXY_HOST)"
+      _u="$(read_conf "$_f" PROXY_USER)"
+      printf "  %-20s  %s@%s\n" "$_n" "${_u:-?}" "${_h:-?}"
+    done
+  fi
+  echo ""
+  echo "  ── IDE integration ────────────────────────────"
+  echo "  Command    : $WRAPPER_PATH"
+  echo "  Config dir : $CONF_DIR"
+  echo ""
+}
+
+cmd_check() {
+  local _active; _active="$(active_profile)"
+  local _proxy;  _proxy="$(read_conf "$PROFILES_DIR/${_active}.conf" PROFILE_PROXY)"
+  [[ -n "$_proxy" ]] || die "Active profile '$_active' has no proxy linked.
+  Link one: claude-proxy profile set-proxy $_active <proxy>"
+  cmd_proxy check "$_proxy"
+}
+
+cmd_run() {
+  [[ -n "${1:-}" ]] || die "Usage: claude-proxy run <profile>"
+  local _profile="$1"; shift || true
+  validate_name "$_profile" "profile name"
+  require_profile "$_profile"
+  PROXIED_CLAUDE_PROFILE="$_profile" exec "$WRAPPER_PATH" "$@"
+}
+
 # ── Top-level dispatch ───────────────────────────────────────────────────────
 
 ensure_default_profile
@@ -1196,68 +1269,9 @@ case "$cmd" in
     cmd_profile use "$1"
     ;;
 
-  status)
-    _st_active="$(active_profile)"
-    _st_dir="$(profile_claude_dir "$_st_active")"
-    _st_proxy="$(read_conf "$PROFILES_DIR/${_st_active}.conf" PROFILE_PROXY)"
-    echo ""
-    echo "  ── Active profile ─────────────────────────────"
-    echo "  Profile    : $_st_active"
-    echo "  Claude dir : $(display_path "$_st_dir")"
-    echo "  Proxy      : ${_st_proxy:-(no proxy)}"
-    if [[ -n "$_st_proxy" ]]; then
-      _st_pconf="$PROXIES_DIR/${_st_proxy}.conf"
-      if [[ -f "$_st_pconf" ]]; then
-        echo "  Host       : $(read_conf "$_st_pconf" PROXY_HOST)"
-        echo "  User       : $(read_conf "$_st_pconf" PROXY_USER)"
-      else
-        warn "Proxy '$_st_proxy' config is missing!"
-      fi
-    fi
-    echo ""
-    echo "  ── All profiles ───────────────────────────────"
-    shopt -s nullglob
-    _st_pfiles=("$PROFILES_DIR"/*.conf)
-    shopt -u nullglob
-    if [[ ${#_st_pfiles[@]} -eq 0 ]]; then
-      echo "  (none)"
-    else
-      for _st_f in "${_st_pfiles[@]}"; do
-        _st_n="$(basename "$_st_f" .conf)"
-        _st_lp="$(read_conf "$_st_f" PROFILE_PROXY)"
-        _st_marker=""; [[ "$_st_n" == "$_st_active" ]] && _st_marker=" ◀"
-        printf "  %-20s  %s%s\n" "$_st_n" "${_st_lp:-(no proxy)}" "$_st_marker"
-      done
-    fi
-    echo ""
-    echo "  ── All proxies ────────────────────────────────"
-    shopt -s nullglob
-    _st_xfiles=("$PROXIES_DIR"/*.conf)
-    shopt -u nullglob
-    if [[ ${#_st_xfiles[@]} -eq 0 ]]; then
-      echo "  (none)"
-    else
-      for _st_f in "${_st_xfiles[@]}"; do
-        _st_n="$(basename "$_st_f" .conf)"
-        _st_h="$(read_conf "$_st_f" PROXY_HOST)"
-        _st_u="$(read_conf "$_st_f" PROXY_USER)"
-        printf "  %-20s  %s@%s\n" "$_st_n" "${_st_u:-?}" "${_st_h:-?}"
-      done
-    fi
-    echo ""
-    echo "  ── IDE integration ────────────────────────────"
-    echo "  Command    : $WRAPPER_PATH"
-    echo "  Config dir : $CONF_DIR"
-    echo ""
-    ;;
+  status) cmd_status ;;
 
-  check)
-    _active="$(active_profile)"
-    _proxy="$(read_conf "$PROFILES_DIR/${_active}.conf" PROFILE_PROXY)"
-    [[ -n "$_proxy" ]] || die "Active profile '$_active' has no proxy linked.
-  Link one: claude-proxy profile set-proxy $_active <proxy>"
-    cmd_proxy check "$_proxy"
-    ;;
+  check) cmd_check ;;
 
   version|--version|-v)
     echo "claude-proxy $VERSION"
@@ -1305,13 +1319,7 @@ case "$cmd" in
     ok "Uninstalled. Your Claude account dirs (~/.claude*) were kept."
     ;;
 
-  run)
-    [[ -n "${1:-}" ]] || die "Usage: claude-proxy run <profile>"
-    _run_profile="$1"; shift || true
-    validate_name "$_run_profile" "profile name"
-    require_profile "$_run_profile"
-    PROXIED_CLAUDE_PROFILE="$_run_profile" exec "$WRAPPER_PATH" "$@"
-    ;;
+  run) cmd_run "$@" ;;
 
   "")
     print_help
