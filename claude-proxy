@@ -1092,6 +1092,35 @@ EOF
   esac
 }
 
+cmd_update() {
+  local _target_version=""
+
+  # Parse args
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --version)
+        [[ -n "${2:-}" ]] || die "Usage: claude-proxy update --version <tag> (e.g. v2.1.0)"
+        _target_version="$2"; shift 2 ;;
+      *)
+        die "Unknown option: $1
+Usage: claude-proxy update [--version <tag>]" ;;
+    esac
+  done
+
+  require_interactive
+
+  local _TMP
+  _TMP="$(mktemp)"
+  trap 'rm -f "$_TMP"' EXIT
+  curl -fsSL --proto '=https' --tlsv1.2 \
+    "https://raw.githubusercontent.com/r0mm4k/proxied-claude/main/install.sh" \
+    -o "$_TMP"
+  echo "Updating proxied-claude from GitHub..."
+  echo "Your profiles, proxies and settings are preserved."
+  echo ""
+  PROXIED_CLAUDE_UPGRADE=1 bash "$_TMP"
+}
+
 # ── Top-level dispatch ───────────────────────────────────────────────────────
 
 ensure_default_profile
@@ -1184,17 +1213,7 @@ case "$cmd" in
     lock_release
     ;;
 
-  update)
-    echo "Updating proxied-claude from GitHub..."
-    echo "Your profiles, proxies and settings are preserved."
-    echo ""
-    _TMP="$(mktemp)"
-    trap 'rm -f "$_TMP"' EXIT
-    curl -fsSL --proto '=https' --tlsv1.2 \
-      "https://raw.githubusercontent.com/r0mm4k/proxied-claude/main/install.sh" \
-      -o "$_TMP"
-    PROXIED_CLAUDE_UPGRADE=1 bash "$_TMP"
-    ;;
+  update) cmd_update "$@" ;;
 
   uninstall)
     echo "This will remove:"

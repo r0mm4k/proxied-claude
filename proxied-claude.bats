@@ -376,6 +376,39 @@ EOF
     proxy="${proxy#PROFILE_PROXY=}"; proxy="${proxy#\"}"; proxy="${proxy%\"}"
     [[ -n "$proxy" ]] && printf '%s (%s)' "$profile" "$proxy" || printf '%s' "$profile"
   }
+
+  require_interactive() {
+    [[ -t 0 ]] || die "This command requires interactive input (stdin must be a terminal)."
+  }
+
+  cmd_update() {
+    local _target_version=""
+
+    # Parse args
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --version)
+          [[ -n "${2:-}" ]] || die "Usage: claude-proxy update --version <tag> (e.g. v2.1.0)"
+          _target_version="$2"; shift 2 ;;
+        *)
+          die "Unknown option: $1
+Usage: claude-proxy update [--version <tag>]" ;;
+      esac
+    done
+
+    require_interactive
+
+    local _TMP
+    _TMP="$(mktemp)"
+    trap 'rm -f "$_TMP"' EXIT
+    curl -fsSL --proto '=https' --tlsv1.2 \
+      "https://raw.githubusercontent.com/r0mm4k/proxied-claude/main/install.sh" \
+      -o "$_TMP"
+    echo "Updating proxied-claude from GitHub..."
+    echo "Your profiles, proxies and settings are preserved."
+    echo ""
+    PROXIED_CLAUDE_UPGRADE=1 bash "$_TMP"
+  }
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1979,4 +2012,29 @@ run_validate() {
   PROXIED_CLAUDE_PROFILE="" run _pc_info
   [ "$status" -eq 0 ]
   [ "$output" = "personal" ]
+}
+
+# ── update command ────────────────────────────────────────────────────────────
+
+@test "update: --version missing arg dies with usage" {
+  _define_helpers
+  require_interactive() { :; }
+  run cmd_update --version
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Usage: claude-proxy update --version"* ]]
+}
+
+@test "update: non-interactive without --version dies" {
+  _define_helpers
+  run cmd_update < /dev/null
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"requires interactive"* ]]
+}
+
+@test "update: --version with unknown flag dies" {
+  _define_helpers
+  require_interactive() { :; }
+  run cmd_update --unknown
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Unknown option"* ]]
 }
