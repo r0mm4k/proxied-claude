@@ -398,6 +398,28 @@ Usage: claude-proxy update [--version <tag>]" ;;
 
     require_interactive
 
+    # Fetch latest release from GitHub if no version pinned
+    if [[ -z "$_target_version" ]]; then
+      local _fetched
+      _fetched="$(curl -fsSL --proto '=https' --tlsv1.2 \
+        "https://api.github.com/repos/r0mm4k/proxied-claude/releases/latest" \
+        2>/dev/null \
+        | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])" 2>/dev/null \
+        || true)"
+      if [[ -n "$_fetched" ]]; then
+        _target_version="$_fetched"
+      else
+        warn "Could not fetch latest version from GitHub. Installing from main branch."
+      fi
+    fi
+
+    # Already up to date?
+    local _installed="v$VERSION"
+    if [[ -n "$_target_version" && "$_installed" == "$_target_version" ]]; then
+      echo "Already up to date: $_installed"
+      return 0
+    fi
+
     local _TMP
     _TMP="$(mktemp)"
     trap 'rm -f "$_TMP"' EXIT
@@ -407,7 +429,11 @@ Usage: claude-proxy update [--version <tag>]" ;;
     echo "Updating proxied-claude from GitHub..."
     echo "Your profiles, proxies and settings are preserved."
     echo ""
-    PROXIED_CLAUDE_UPGRADE=1 bash "$_TMP"
+    if [[ -n "$_target_version" ]]; then
+      VERSION="$_target_version" PROXIED_CLAUDE_UPGRADE=1 bash "$_TMP"
+    else
+      PROXIED_CLAUDE_UPGRADE=1 bash "$_TMP"
+    fi
   }
 }
 
@@ -2037,4 +2063,34 @@ run_validate() {
   run cmd_update --unknown
   [ "$status" -ne 0 ]
   [[ "$output" == *"Unknown option"* ]]
+}
+
+@test "update: already up to date exits 0 with message" {
+  _define_helpers
+  VERSION="2.0.0"
+  require_interactive() { :; }
+  curl() {
+    # First curl call is GitHub API; we never reach install.sh download
+    echo '{"tag_name":"v2.0.0"}'
+  }
+  run cmd_update
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Already up to date: v2.0.0"* ]]
+}
+
+@test "update: fetches new version tag from GitHub API" {
+  _define_helpers
+  VERSION="2.0.0"
+  require_interactive() { :; }
+  curl() {
+    if [[ "$*" == *api.github.com* ]]; then
+      echo '{"tag_name":"v2.1.0"}'
+    else
+      echo "INSTALL_SH_DOWNLOADED"
+    fi
+  }
+  bash() { echo "BASH_CALLED: VERSION=$VERSION"; }
+  run cmd_update
+  [[ "$output" == *"v2.0.0"* ]]
+  [[ "$output" == *"v2.1.0"* ]]
 }

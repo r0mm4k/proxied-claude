@@ -1109,6 +1109,28 @@ Usage: claude-proxy update [--version <tag>]" ;;
 
   require_interactive
 
+  # Fetch latest release from GitHub if no version pinned
+  if [[ -z "$_target_version" ]]; then
+    local _fetched
+    _fetched="$(curl -fsSL --proto '=https' --tlsv1.2 \
+      "https://api.github.com/repos/r0mm4k/proxied-claude/releases/latest" \
+      2>/dev/null \
+      | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])" 2>/dev/null \
+      || true)"
+    if [[ -n "$_fetched" ]]; then
+      _target_version="$_fetched"
+    else
+      warn "Could not fetch latest version from GitHub. Installing from main branch."
+    fi
+  fi
+
+  # Already up to date?
+  local _installed="v$VERSION"
+  if [[ -n "$_target_version" && "$_installed" == "$_target_version" ]]; then
+    echo "Already up to date: $_installed"
+    return 0
+  fi
+
   local _TMP
   _TMP="$(mktemp)"
   trap 'rm -f "$_TMP"' EXIT
@@ -1118,7 +1140,11 @@ Usage: claude-proxy update [--version <tag>]" ;;
   echo "Updating proxied-claude from GitHub..."
   echo "Your profiles, proxies and settings are preserved."
   echo ""
-  PROXIED_CLAUDE_UPGRADE=1 bash "$_TMP"
+  if [[ -n "$_target_version" ]]; then
+    VERSION="$_target_version" PROXIED_CLAUDE_UPGRADE=1 bash "$_TMP"
+  else
+    PROXIED_CLAUDE_UPGRADE=1 bash "$_TMP"
+  fi
 }
 
 # ── Top-level dispatch ───────────────────────────────────────────────────────
