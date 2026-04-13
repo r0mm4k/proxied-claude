@@ -36,7 +36,7 @@ set -euo pipefail
 #   claude-proxy uninstall       → remove everything
 # ─────────────────────────────────────────────────────────────────────────────
 
-VERSION="2.1.2"
+VERSION="2.1.3"
 
 CONF_DIR="$HOME/.config/proxied-claude"
 PROFILES_DIR="$CONF_DIR/profiles"
@@ -243,6 +243,7 @@ do_copy_settings() {
       for c in "${conflicts[@]}"; do info "  $c"; done
       echo ""
       read -r -p "  Overwrite? [y/N] " _confirm
+      _confirm="${_confirm%$'\r'}"
       [[ "${_confirm:-}" =~ ^[Yy]$ ]] || return 0
       echo ""
     else
@@ -575,6 +576,7 @@ EOF
           echo ""
           local _fresh=""
           read -r -p "  Start fresh and delete existing data? [y/N] " _fresh
+          _fresh="${_fresh%$'\r'}"
           if [[ "${_fresh:-}" =~ ^[Yy]$ ]]; then
             rm -rf "$claude_dir"
           else
@@ -615,11 +617,13 @@ EOF
           echo "    (skip)"
           echo ""
           read -r -p "  Copy settings from profile? [profile name or Enter to skip]: " _choice
+          _choice="${_choice%$'\r'}"
           if [[ -n "$_choice" && "$_choice" != "skip" ]]; then
             if [[ -f "$PROFILES_DIR/${_choice}.conf" ]]; then
               local src_dir; src_dir="$(profile_claude_dir "$_choice")"
               local _inc_proj=0
               read -r -p "  Copy projects too? [y/N] " _proj_choice
+              _proj_choice="${_proj_choice%$'\r'}"
               [[ "${_proj_choice:-}" =~ ^[Yy]$ ]] && _inc_proj=1
               do_copy_settings "$src_dir" "$claude_dir" "$_choice" "$name" "$_inc_proj"
             else
@@ -633,6 +637,7 @@ EOF
       if [[ -t 0 ]]; then
         echo ""
         read -r -p "  Set '$name' as active profile now? [Y/n] " _activate
+        _activate="${_activate%$'\r'}"
         if [[ ! "${_activate:-}" =~ ^[Nn]$ ]]; then
           echo ""
           lock_acquire
@@ -916,6 +921,7 @@ EOF
         warn "Those profiles will be unlinked and run without a proxy."
         require_interactive
         read -r -p "Delete anyway? [y/N] " _confirm
+        _confirm="${_confirm%$'\r'}"
         [[ "${_confirm:-}" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 0; }
         echo ""
         # Unlink from all profiles before deleting
@@ -1170,6 +1176,7 @@ Pin a version explicitly:
     _prompt_verb="Upgrade"
   fi
   read -r -p "$_prompt_verb to $_target_version? [y/N] " _confirm
+  _confirm="${_confirm%$'\r'}"
   [[ "${_confirm:-}" =~ ^[Yy]$ ]] || { echo "Aborted."; return 0; }
 
   # Install
@@ -1305,6 +1312,7 @@ case "$cmd" in
     echo ""
     require_interactive
     read -r -p "Are you sure? [y/N] " _confirm
+    _confirm="${_confirm%$'\r'}"
     [[ "${_confirm:-}" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 0; }
 
     shopt -s nullglob
