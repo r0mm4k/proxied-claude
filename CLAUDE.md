@@ -6,7 +6,7 @@ Shell utility to run Claude Code behind a corporate HTTP proxy with multi-profil
 
 Three files, clear separation:
 - `proxied-claude` — thin launcher (~109 lines): resolves profile (env var override or active_profile) → fetches Keychain password → ensures `ide/` symlink exists → `exec claude`
-- `claude-proxy` — all management logic: profiles, proxies, migration, lock (~1200 lines)
+- `claude-proxy` — all management logic: profiles, proxies, migration, lock (~1343 lines)
 - `install.sh` — download, patch `__CLAUDE_BIN__`, delegate wizard/migration to claude-proxy
 
 Config lives in `~/.config/proxied-claude/`:
@@ -45,7 +45,7 @@ After completing a brainstorm/plan/implement cycle, delete the generated spec an
 
 - `proxied-claude` cannot be tested end-to-end (does `exec claude`). Test logic via mirrored helpers in bats.
 - `claude-proxy` binary always calls `ensure_default_profile` on startup — do not run it in tests (touches `$HOME/.config`).
-- `install.sh` duplicates default-profile creation (lines 97–109) because on fresh install `claude-proxy migrate` is skipped. This is intentional.
+- `install.sh` duplicates default-profile creation (step 5, after migration) because on fresh install `claude-proxy migrate` is skipped. This is intentional.
 - Architecture tests check exact line counts in source files — update counts if you add matching lines to `proxied-claude` or `claude-proxy`.
 - `ide/` in each profile dir is a symlink to `~/.config/proxied-claude/ide/` (shared lock-file dir). Created in `profile create`, migrated in `install.sh`, safety-net in `proxied-claude`. Plugin Config directory is `~/.config/proxied-claude` — a real path, never a symlink.
 - `PROXIED_CLAUDE_PROFILE` env var overrides global `active_profile` per-process only. `claude-proxy run <n>` is the user-facing shortcut.
