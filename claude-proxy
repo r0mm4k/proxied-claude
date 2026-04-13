@@ -36,7 +36,7 @@ set -euo pipefail
 #   claude-proxy uninstall       → remove everything
 # ─────────────────────────────────────────────────────────────────────────────
 
-VERSION="2.1.1"
+VERSION="2.1.2"
 
 CONF_DIR="$HOME/.config/proxied-claude"
 PROFILES_DIR="$CONF_DIR/profiles"
@@ -1176,13 +1176,14 @@ Pin a version explicitly:
   echo ""
   echo "Your profiles, proxies and settings are preserved."
   echo ""
-  local _TMP
   _TMP="$(mktemp)"
   trap 'rm -f "$_TMP"' EXIT
   curl -fsSL --proto '=https' --tlsv1.2 \
     "https://raw.githubusercontent.com/r0mm4k/proxied-claude/${_target_version}/install.sh" \
     -o "$_TMP"
   VERSION="$_target_version" PROXIED_CLAUDE_UPGRADE=1 bash "$_TMP"
+  rm -f "$_TMP"
+  trap - EXIT
 }
 
 cmd_status() {
