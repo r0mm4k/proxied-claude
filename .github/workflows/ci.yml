@@ -23,4 +23,4 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run shellcheck
-        run: shellcheck proxied-claude claude-proxy install.sh
+        run: shellcheck --severity=error proxied-claude claude-proxy install.sh
