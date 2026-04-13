@@ -420,15 +420,40 @@ Usage: claude-proxy update [--version <tag>]" ;;
       return 0
     fi
 
+    # Version preview
+    echo ""
+    if [[ -n "$_target_version" ]]; then
+      echo "  Installed : $_installed"
+      echo "  Latest    : $_target_version"
+      echo ""
+
+      # Major version bump warning
+      local _inst_major _new_major
+      _inst_major="${VERSION%%.*}"
+      _new_major="${_target_version#v}"; _new_major="${_new_major%%.*}"
+      if [[ "$_new_major" -gt "$_inst_major" ]]; then
+        warn "Major version upgrade ($_installed → $_target_version)."
+        echo "   Review release notes before upgrading:"
+        echo "   https://github.com/r0mm4k/proxied-claude/releases/tag/${_target_version}"
+        echo ""
+      fi
+
+      read -r -p "Upgrade to $_target_version? [y/N] " _confirm
+    else
+      read -r -p "Upgrade to latest (main branch)? [y/N] " _confirm
+    fi
+    [[ "${_confirm:-}" =~ ^[Yy]$ ]] || { echo "Aborted."; return 0; }
+
+    # Install
+    echo ""
+    echo "Your profiles, proxies and settings are preserved."
+    echo ""
     local _TMP
     _TMP="$(mktemp)"
     trap 'rm -f "$_TMP"' EXIT
     curl -fsSL --proto '=https' --tlsv1.2 \
       "https://raw.githubusercontent.com/r0mm4k/proxied-claude/main/install.sh" \
       -o "$_TMP"
-    echo "Updating proxied-claude from GitHub..."
-    echo "Your profiles, proxies and settings are preserved."
-    echo ""
     if [[ -n "$_target_version" ]]; then
       VERSION="$_target_version" PROXIED_CLAUDE_UPGRADE=1 bash "$_TMP"
     else
@@ -2089,9 +2114,23 @@ run_validate() {
       echo "INSTALL_SH_DOWNLOADED"
     fi
   }
-  bash() { echo "BASH_CALLED: VERSION=$VERSION"; }
-  run cmd_update
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"v2.0.0"* ]]
-  [[ "$output" == *"v2.1.0"* ]]
+  # Use a file to capture output without 'run' (avoids bash() mock shadowing 'run bash -c')
+  local _out; _out="$(mktemp)"
+  printf 'y\n' | cmd_update > "$_out" 2>&1
+  local _captured; _captured="$(cat "$_out")"; rm -f "$_out"
+  [[ "$_captured" == *"v2.0.0"* ]]
+  [[ "$_captured" == *"v2.1.0"* ]]
+}
+
+@test "update: version preview strings present in source (structural)" {
+  grep -q "Installed" "$(dirname "$BATS_TEST_FILENAME")/claude-proxy"
+  grep -q "Latest" "$(dirname "$BATS_TEST_FILENAME")/claude-proxy"
+}
+
+@test "update: major version warning present in source (structural)" {
+  grep -q "Major version upgrade" "$(dirname "$BATS_TEST_FILENAME")/claude-proxy"
+}
+
+@test "update: abort path present in source (structural)" {
+  grep -q "Aborted" "$(dirname "$BATS_TEST_FILENAME")/claude-proxy"
 }
