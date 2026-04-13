@@ -66,6 +66,12 @@ chmod +x ./install.sh
 ./install.sh
 ```
 
+To install from a specific branch or commit (e.g. for local testing):
+
+```bash
+REPO_RAW="https://raw.githubusercontent.com/r0mm4k/proxied-claude/main" bash install.sh
+```
+
 The installer:
 1. Installs Claude Code via `brew install --cask claude-code` if not present
 2. Installs `/usr/local/bin/proxied-claude` — the wrapper
