@@ -209,7 +209,8 @@ claude-proxy status         # → full overview (active profile + all profiles +
 claude-proxy check          # → proxy check for the active profile's proxy
 claude-proxy version        # print version
 claude-proxy migrate        # manually trigger v1 → v2 migration
-claude-proxy update         # re-download latest from GitHub (preserves all config)
+claude-proxy update                    # re-download latest release from GitHub (preserves all config)
+claude-proxy update --version v2.1.0  # pin to a specific release (also works for downgrade)
 claude-proxy uninstall      # remove binaries + config (keeps ~/.claude* dirs)
 ```
 
