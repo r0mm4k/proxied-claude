@@ -6,6 +6,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
+## [2.1.0] - 2026-04-13
+### Added
+- Update fetches latest release from GitHub API, detects already-up-to-date
+- Update shows version preview, major version warning, and asks confirmation
+- Wizard proxy setup for default profile; fix double login note on profile create --from
+
+### Changed
+- Extract cmd_update(), add --version arg parsing and require_interactive guard
+- Remove dead branches in cmd_update after _target_version is always set
+- Simplify dir_has_data to single process; unify printf in helpers
+- Use keychain_service() in uninstall instead of inline hardcode
+- Profile rename uses profile_claude_dir() instead of manual fallback
+- Cmd_update — remove Reinstall dead branch, redundant guard, simplify version vars
+- Extract mcp_has_conflict and mcp_copy_servers helpers from do_copy_settings
+- Extract cmd_status, cmd_check, cmd_run from inline case blocks
+
+### Documentation
+- Also bump SCRIPT_VERSION in install.sh as part of release process
+- Add implementation plan for update version preview and --version flag (#25, #6)
+- Update help text and CONTRIBUTING for update --version flag
+- Show --version flag in help text; fix: guard major version comparison against non-numeric input
+- Remove redundant update example line in header comment
+- Remove redundant update example line in print_help
+- Update security note — update downloads from release tag, not main
+- Add update --version flag to README command reference
+- Update CLAUDE.md — claude-proxy line count, remove stale line numbers
+- Add REPO_RAW example for installing from branch/main
+
+### Fixed
+- Shellcheck --severity=error to skip SC2015 info warnings
+- Rename VERSION to SCRIPT_VERSION in install.sh to avoid collision with pinning env var
+- Normalize --version tag, downgrade prompt, banner version, sync comments
+- Remove main-branch fallback and dead SCRIPT_VERSION
+
 ## [2.0.0] - 2026-04-13
 ### Added
 - Replace per-item conflict warn with batch confirm/die in do_copy_settings
