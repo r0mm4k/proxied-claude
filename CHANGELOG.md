@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
+## [2.1.1] - 2026-04-13
+### Fixed
+- Prevent python3 from consuming stdin before interactive prompts; add blank lines after prompt answers
+
 ## [2.1.0] - 2026-04-13
 ### Added
 - Update fetches latest release from GitHub API, detects already-up-to-date
