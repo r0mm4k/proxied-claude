@@ -51,6 +51,7 @@ The wrapper is intentionally thin (~109 lines) — no migration, no self-repair,
 - macOS (uses `security` CLI for Keychain)
 - [Homebrew](https://brew.sh)
 - Claude Code (auto-installed if missing)
+- `python3` — only for `claude-proxy profile copy-settings` (MCP server transfer); pre-installed on most macOS systems
 
 ---
 
