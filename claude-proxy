@@ -36,7 +36,7 @@ set -euo pipefail
 #   claude-proxy uninstall       → remove everything
 # ─────────────────────────────────────────────────────────────────────────────
 
-VERSION="2.1.4"
+VERSION="2.1.5"
 
 CONF_DIR="$HOME/.config/proxied-claude"
 PROFILES_DIR="$CONF_DIR/profiles"
@@ -244,7 +244,7 @@ do_copy_settings() {
       echo ""
       printf '%s' "  Overwrite? [y/N] " >&2; read -r _confirm
       _confirm="${_confirm%$'\r'}"
-      [[ "${_confirm:-}" =~ ^[Yy]$ ]] || return 0
+      [[ "${_confirm:-}" =~ ^[Yy]$ ]] || return 1
       echo ""
     else
       die "${#conflicts[@]} conflicting item(s) in '$dst_label'. Run interactively to confirm overwrite."
@@ -599,7 +599,7 @@ EOF
       if [[ -n "$copy_from" ]]; then
         require_profile "$copy_from"
         local src_dir; src_dir="$(profile_claude_dir "$copy_from")"
-        do_copy_settings "$src_dir" "$claude_dir" "$copy_from" "$name" "$include_projects"
+        do_copy_settings "$src_dir" "$claude_dir" "$copy_from" "$name" "$include_projects" || true
       elif [[ -t 0 ]]; then
         shopt -s nullglob
         local existing=("$PROFILES_DIR"/*.conf)
@@ -625,7 +625,7 @@ EOF
               printf '%s' "  Copy projects too? [y/N] " >&2; read -r _proj_choice
               _proj_choice="${_proj_choice%$'\r'}"
               [[ "${_proj_choice:-}" =~ ^[Yy]$ ]] && _inc_proj=1
-              do_copy_settings "$src_dir" "$claude_dir" "$_choice" "$name" "$_inc_proj"
+              do_copy_settings "$src_dir" "$claude_dir" "$_choice" "$name" "$_inc_proj" || true
             else
               warn "Profile '$_choice' not found — skipping copy"
             fi
@@ -769,8 +769,9 @@ EOF
       require_profile "$from_profile"
       local src_dir; src_dir="$(profile_claude_dir "$from_profile")"
       local dst_dir; dst_dir="$(profile_claude_dir "$name")"
-      do_copy_settings "$src_dir" "$dst_dir" "$from_profile" "$name" "$include_projects"
-      info "Note: you still need to log in to Claude in the new profile"
+      if do_copy_settings "$src_dir" "$dst_dir" "$from_profile" "$name" "$include_projects"; then
+        info "Note: you still need to log in to Claude in the new profile"
+      fi
       ;;
 
     rename)
