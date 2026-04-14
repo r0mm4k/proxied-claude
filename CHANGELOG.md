@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
+## [2.1.7] - 2026-04-14
+### Documentation
+- Add Per-profile setup section (mcp, auth, plugin per profile)
+- Update badges — Claude orange, Homebrew amber, add CI tests badge
+- Homebrew badge violet, license badge blue
+- License badge yellow
+- Document python3 as optional requirement for copy-settings
+
+### Fixed
+- Remove python3 dependency for install/update, guard mcp copy with python3 check
+
 ## [2.1.6] - 2026-04-14
 ### Changed
 - Extract confirm, write_profile_conf, write_proxy_conf, validate_proxy_inputs helpers
