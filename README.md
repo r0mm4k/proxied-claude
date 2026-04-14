@@ -128,6 +128,33 @@ proxied-claude
 
 ---
 
+## Per-profile setup
+
+`proxied-claude` is a transparent wrapper — every `claude` subcommand works through it and automatically targets the active profile's config directory. This means authentication, MCP servers, and plugins are all per-profile:
+
+```bash
+# Active profile
+proxied-claude auth login
+proxied-claude mcp add my-server npx -y my-mcp-server
+proxied-claude plugin install superpowers
+
+# Specific profile (without switching the active one)
+PROXIED_CLAUDE_PROFILE=work proxied-claude auth login
+PROXIED_CLAUDE_PROFILE=work proxied-claude mcp add my-server npx -y my-mcp-server
+PROXIED_CLAUDE_PROFILE=work proxied-claude plugin install superpowers
+```
+
+`claude-proxy run` is a shorthand for the same thing:
+
+```bash
+claude-proxy run work mcp add my-server npx -y my-mcp-server
+claude-proxy run work auth login
+```
+
+MCP server config is also portable across profiles via `claude-proxy profile copy-settings` (see the [copy-settings table](#what-gets-copied-with-copy-settings)).
+
+---
+
 ## Commands
 
 ### Profiles
