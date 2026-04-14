@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
+## [2.1.5] - 2026-04-14
+### Fixed
+- Hide login note in copy-settings when user declines overwrite
+
 ## [2.1.4] - 2026-04-13
 ### Fixed
 - Replace read -p with printf+read to fix interactive prompts in bash 3.2
