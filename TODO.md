@@ -6,62 +6,15 @@ Planned improvements for future iterations.
 
 ## Features
 
-- [x] 1. **`PROXIED_CLAUDE_PROFILE` env var override** — run with a specific profile without
-  changing global `active_profile`. Useful for multiple terminals or aliases:
-  ```bash
-  PROXIED_CLAUDE_PROFILE=work proxied-claude
-  alias claude-work="PROXIED_CLAUDE_PROFILE=work proxied-claude"
-  # or via: claude-proxy run work
-  ```
-
-- [x] 2. **`copy-settings --include-projects`** — optional flag to also copy the `projects/`
-  directory (per-repo Claude data). Skipped by default — only useful if both profiles
-  work on the same repositories:
-  ```bash
-  claude-proxy profile copy-settings work --from default --include-projects
-  ```
-  Additional UX improvements needed:
-  - When destination has existing data, show a summary of conflicting files/dirs
-    and ask for batch confirmation instead of per-file `warn` (especially important
-    with `--include-projects` where `projects/` may have dozens of subdirs);
-    non-interactive with conflicts → `die` (consistent with `proxy delete`, `uninstall`)
-  - In interactive `profile create`, also ask "Copy projects too? [y/N]" when
-    `--include-projects` becomes available
-
-- [x] 3. **`profile create` — existing directory handling** — if `~/.claude-<name>` already
-  exists and is non-empty (e.g. after deleting and recreating a profile), warn the user
-  and ask whether to start fresh:
-  ```
-  ⚠  Directory ~/.claude-work already exists and contains data.
-     Your previous session data and settings are preserved.
-
-     Start fresh and delete existing data? [y/N]
-  ```
-  - **N (default)**: use existing dir, replace "you need to log in" note with
-    `"If your session expired, log in again when you first use this profile"`
-  - **Y**: `rm -rf ~/.claude-work && mkdir`, show normal login note
-  - Non-interactive (`-t 0` false): silently use existing dir + `warn` (no prompt)
-
-- [ ] 4. **`claude-proxy backup` / `restore`** — export all config to a tarball for machine
+- [ ] 1. **`claude-proxy backup` / `restore`** — export all config to a tarball for machine
   migration. Includes `profiles/`, `proxies/`, `active_profile`. Never includes Keychain
   passwords — user re-enters them via `claude-proxy proxy set-password <n>` after restore.
 
-- [ ] 5. **`claude-proxy doctor`** — diagnose the full system in one command: binaries,
+- [ ] 2. **`claude-proxy doctor`** — diagnose the full system in one command: binaries,
   `__CLAUDE_BIN__` patch, config dir, profile dirs, proxy confs, Keychain entries,
   active profile validity.
 
-- [x] 6. **`claude-proxy update --version <n>`** — pin to a specific release instead of
-  always pulling `main`. Two-part change:
-  - `install.sh`: respect `VERSION` env var to set `REPO_RAW` to a tagged ref instead of `main`
-  - `claude-proxy update --version <n>`: pass `VERSION=<n>` when invoking `install.sh`
-  ```bash
-  claude-proxy update --version 2.1.0
-  # or via install.sh directly:
-  VERSION=2.1.0 bash <(curl -fsSL .../install.sh)
-  ```
-  Depends on: #22 (GitHub Releases).
-
-- [ ] 7. **Directory-based auto-switch** — `proxied-claude` automatically picks the right
+- [ ] 3. **Directory-based auto-switch** — `proxied-claude` automatically picks the right
   profile based on a `.proxied-claude-profile` file in the project root (or any parent
   directory, walking up like `git` searches for `.git`). This is the correct solution
   for **parallel multi-window IDE** use: each project declares its profile once, both
@@ -115,34 +68,29 @@ Planned improvements for future iterations.
   - File name: `.proxied-claude-profile` vs `.proxied-claude` — latter is shorter but
     could conflict with a directory name
 
-- [ ] 8. **Failover proxies** — define multiple proxies per profile; `proxied-claude` tries
+- [ ] 4. **Failover proxies** — define multiple proxies per profile; `proxied-claude` tries
   them in order if the first is unreachable:
   ```
   PROFILE_PROXIES="corp-lt corp-backup"
   ```
 
-- [ ] 9. **`claude-proxy proxy create --check`** — immediately run `proxy check` after
+- [ ] 5. **`claude-proxy proxy create --check`** — immediately run `proxy check` after
   creating a proxy to verify it works, without a separate command.
 
-- [ ] 10. **`claude-proxy profile set-description <profile> <text>`** — store a
+- [ ] 6. **`claude-proxy profile set-description <profile> <text>`** — store a
   human-readable note in the profile conf, shown in `list` and `status`:
   ```
   work     corp-lt   Work Team account  ◀ active
   personal (none)    Personal Pro
   ```
 
-- [ ] 11. **`--json` output** — machine-readable output for `status`, `profile list`,
+- [ ] 7. **`--json` output** — machine-readable output for `status`, `profile list`,
   `proxy list`. Useful for scripting and IDE integrations.
 
-- [x] 12. **Active profile display in Claude Code statusline** — `_pc_info()` shell
-  helper reads `active_profile` + `profiles/<n>.conf` directly (no subprocess).
-  Outputs `profile (proxy)` (or just `profile`, or nothing). Ships as an optional
-  snippet in README under "Claude Code statusline integration".
-
-- [ ] 13. **`claude-proxy proxy check --watch`** — periodic proxy health monitoring,
+- [ ] 8. **`claude-proxy proxy check --watch`** — periodic proxy health monitoring,
   re-checking at a given interval until interrupted.
 
-- [ ] 14. **`claude-proxy proxy set-host` / `proxy set-user`** — change host or user of an
+- [ ] 9. **`claude-proxy proxy set-host` / `proxy set-user`** — change host or user of an
   existing proxy without deleting and recreating it (which requires re-entering the password).
   v1 had top-level `set-host` / `set-user`; v2 removed them but never added the equivalent
   under `proxy`:
@@ -151,27 +99,17 @@ Planned improvements for future iterations.
   claude-proxy proxy set-user corp-lt john.doe
   ```
 
-- [ ] 15. **`copy-settings` — path rewrite for custom `PROFILE_CLAUDE_DIR`** — the sed rewrite
+- [ ] 10. **`copy-settings` — path rewrite for custom `PROFILE_CLAUDE_DIR`** — the sed rewrite
   in `do_copy_settings` only matches `~/.claude` and `~/.claude-<name>` patterns. If a user
   set `PROFILE_CLAUDE_DIR` to a custom path (e.g. `/Volumes/Work/.claude-work`), paths in
   `settings.json` would not be rewritten. Needs passing `src_dir` into sed instead of
   relying on the fixed `~/.claude*` pattern.
 
-- [ ] 29. **`profile create` copy-settings — validate input name** — `claude-proxy:607`
-  the user-typed profile name in the interactive copy-settings prompt is checked only via
-  `[[ -f "$PROFILES_DIR/${_choice}.conf" ]]`. `validate_name` is not called, so a name with
-  special characters gets a silent "not found" warning instead of a clear error. No security
-  risk (file only read, never executed), but inconsistent with the rest of the codebase.
-
-- [ ] 30. **`uninstall` — mention `~/.claude.json` in "Will NOT delete" list** — `claude-proxy:1206`
-  the message reads `Will NOT delete: ~/.claude  ~/.claude-*` but omits `~/.claude.json`
-  (the default profile's auth/config file at `$HOME`). Users manually cleaning up may miss it.
-
-- [ ] 16. **`proxy check` — `nc` without curl fallback** — `cmd_proxy check` uses `nc -z -w 5`
+- [ ] 11. **`proxy check` — `nc` without curl fallback** — `cmd_proxy check` uses `nc -z -w 5`
   with no fallback. The old `install.sh` check had a curl fallback. On macOS `nc` is always
-  present so this is low-risk, but worth revisiting if Linux support (TODO #23) is added.
+  present so this is low-risk, but worth revisiting if Linux support (TODO #15) is added.
 
-- [ ] 24. **`profile create --proxy <n>`** — create profile and link a proxy in one command
+- [ ] 12. **`profile create --proxy <n>`** — create profile and link a proxy in one command
   instead of two separate steps:
   ```bash
   claude-proxy profile create work --from default --proxy corp-lt
@@ -182,49 +120,39 @@ Planned improvements for future iterations.
   Useful in the install wizard too: currently `install.sh` asks about proxy separately after
   profile creation. With this flag the wizard could pass it directly.
 
-- [x] 25. **`claude-proxy update` — confirmation + version preview** — currently updates
-  silently without showing what version is being installed or asking for confirmation.
-  Improvements:
-  - Before downloading: fetch and display the new version number, ask `Upgrade to vX.Y.Z? [y/N]`
-  - For major version bumps (e.g. v1 → v2): show a prominent warning with a link to
-    release notes / migration guide before asking; user can abort and read first
-  - `claude-proxy version --check` (or hint in `claude-proxy status`): compare installed
-    version against latest on GitHub and show a hint if an update is available — without
-    blocking or auto-fetching on every run (only on explicit `version` / `status` call)
-  - `claude-proxy update` should install the latest **tagged release** (via GitHub API
-    `/releases/latest`), not HEAD of `main` — currently tying to `main` means users
-    may receive unreleased code between releases
-  - User-facing `VERSION` env var for pinned installs requires the `v` prefix
-    (e.g. `VERSION=v2.0.0`), matching the git tag format; `SCRIPT_VERSION` in
-    `install.sh` is the display-only version and must never collide with `VERSION`
-  - Depends on: #22 (GitHub Releases, where version info and release notes are published)
+- [ ] 13. **`profile create` copy-settings — validate input name** — `claude-proxy:607`
+  the user-typed profile name in the interactive copy-settings prompt is checked only via
+  `[[ -f "$PROFILES_DIR/${_choice}.conf" ]]`. `validate_name` is not called, so a name with
+  special characters gets a silent "not found" warning instead of a clear error. No security
+  risk (file only read, never executed), but inconsistent with the rest of the codebase.
+
+- [ ] 14. **`uninstall` — mention `~/.claude.json` in "Will NOT delete" list** — `claude-proxy:1206`
+  the message reads `Will NOT delete: ~/.claude  ~/.claude-*` but omits `~/.claude.json`
+  (the default profile's auth/config file at `$HOME`). Users manually cleaning up may miss it.
 
 ---
 
 ## Security
 
-- [ ] 28. **URL-encode proxy password in proxy URL** — `proxied-claude:102`, `claude-proxy:991`
+- [ ] 1. **`install.sh` — checksum verification** — the installer downloads binaries via
+  `curl --proto '=https' --tlsv1.2` but does not verify content hashes. For a tool that
+  stores credentials, a `sha256sum` check against a published `SHA256SUMS` file would
+  materially raise the supply-chain security bar. Depends on GitHub Releases release assets.
+
+- [ ] 2. **URL-encode proxy password in proxy URL** — `proxied-claude:102`, `claude-proxy:991`
   construct `http://user:pass@host` without encoding the password. A password containing
   `@`, `:`, or `/` produces a malformed URL that silently breaks connectivity with no error
   message. Fix: add a `url_encode_pass()` helper (~15 lines of pure bash) and apply it to
   the password before interpolation in both files.
 
-- [ ] 17. **`install.sh` — checksum verification** — the installer downloads binaries via
-  `curl --proto '=https' --tlsv1.2` but does not verify content hashes. For a tool that
-  stores credentials, a `sha256sum` check against a published `SHA256SUMS` file would
-  materially raise the supply-chain security bar. Depends on: #22 (GitHub Releases, where
-  checksums can be published as release assets).
-
 ---
 
 ## CI / DX
 
-- [x] 18. **GitHub Actions** — auto-run `bats proxied-claude.bats` on push and pull requests.
-
-- [ ] 19. **Shell completions (zsh / bash)** — tab-complete subcommands, profile names,
+- [ ] 1. **Shell completions (zsh / bash)** — tab-complete subcommands, profile names,
   and proxy names.
 
-- [ ] 20. **Split test suite into `tests/`** — move `proxied-claude.bats` into a `tests/`
+- [ ] 2. **Split test suite into `tests/`** — move `proxied-claude.bats` into a `tests/`
   directory and split by domain as the suite grows:
   ```
   tests/
@@ -236,60 +164,46 @@ Planned improvements for future iterations.
   ```
   Update `bats` invocation in README and GitHub Actions accordingly.
 
-- [x] 21. **Shellcheck linting in CI** — add a shellcheck step to GitHub Actions alongside
-  the bats tests. Catches common shell pitfalls (quoting, word splitting, deprecated syntax)
-  across `proxied-claude`, `claude-proxy`, and `install.sh`.
-
-- [x] 22. **GitHub Releases with version tags** — publish tagged releases (`v2.0.0`, `v2.1.0`)
-  so the `update` command can pin to a specific version (TODO #6) and users can audit what
-  they're installing.
-
-- [x] 26. **IDE restart after `claude-proxy use`** — Fixed: replaced `active_dir` symlink with
-  shared `~/.config/proxied-claude/ide/` directory. All profiles' `ide/` dirs are symlinks to
-  this physical location. Plugin Config directory is `~/.config/proxied-claude` (real path).
-  No IDE restart needed after `claude-proxy use`.
-
-- [x] 27. **Copy `mcpServers` when creating/copying a profile** — when `CLAUDE_CONFIG_DIR` is set,
-  Claude Code reads user-scoped MCP servers from `${CLAUDE_CONFIG_DIR}/.claude.json` (not the
-  global `~/.claude.json`). Each profile is fully isolated. Result: MCP servers added in one
-  profile don't appear in others.
-
-  **Root cause (confirmed from `cli.js` source, `P0()`):**
-  ```js
-  path.join(process.env.CLAUDE_CONFIG_DIR || os.homedir(), ".claude.json")
-  ```
-  When `CLAUDE_CONFIG_DIR` is set → `.claude.json` is inside the profile dir.
-  When not set (default profile) → `~/.claude.json` at `$HOME`.
-
-  **`.claude.json` path helper:**
-  - Default profile (`CLAUDE_DIR=~/.claude`): file is at `~/.claude.json` → formula: `${CLAUDE_DIR}.json`
-  - Non-default (`CLAUDE_DIR=~/.claude-personal`): file is at `~/.claude-personal/.claude.json` → `${CLAUDE_DIR}/.claude.json`
-  - Detection: `[[ -f "${src_dir}.json" ]] && echo "${src_dir}.json" || echo "${src_dir}/.claude.json"`
-
-  **What to copy:** only `mcpServers` key — everything else (`userID`, `oauthAccount`, `anonymousId`,
-  caches) is profile-specific and will be auto-generated by Claude on first launch.
-  Copying the whole file is wrong: each profile gets a unique Keychain entry (service name
-  includes `sha256(CLAUDE_CONFIG_DIR)[0:8]`), so auth tokens don't transfer anyway.
-
-  **Implementation:** add to `do_copy_settings()` after the existing file copy loop:
-  1. Find source `.claude.json` using the path helper above
-  2. Extract `mcpServers` key using `python3` (system tool, always present on macOS since
-     Homebrew/Xcode CLT is a prerequisite)
-  3. If source has non-empty `mcpServers`:
-     - If destination `.claude.json` doesn't exist → create `{"mcpServers": {...}}`
-       (Claude will fill in the rest on first launch)
-     - If it exists → merge: source servers take precedence (same conflict prompt as other files)
-  4. Report as "Copied mcpServers (.claude.json)"
-
-  **Scope:** only `do_copy_settings()` — covers both `profile create --from` and
-  `profile copy-settings --from`. `migrate` doesn't touch Claude config files → not needed.
-
-  **Open upstream bug:** [anthropics/claude-code#42217](https://github.com/anthropics/claude-code/issues/42217)
-  — MCP servers not loaded when `CLAUDE_CONFIG_DIR` is set (broader issue, our fix is a workaround).
-
 ---
 
 ## Platform
 
-- [ ] 23. **Linux support** — replace macOS `security` CLI with a pluggable Keychain backend:
+- [ ] 1. **Linux support** — replace macOS `security` CLI with a pluggable Keychain backend:
   `secret-tool` (GNOME Keyring), `pass`, or a permissions-restricted file as fallback.
+
+---
+
+## Done
+
+- [x] **`PROXIED_CLAUDE_PROFILE` env var override** — run with a specific profile without
+  changing global `active_profile`. Includes `claude-proxy run <n>` shorthand.
+
+- [x] **`copy-settings --include-projects`** — optional flag to copy `projects/*/memory/`.
+  Conflict detection, batch confirmation, non-interactive die on conflicts.
+
+- [x] **`profile create` — existing directory handling** — warns and asks to start fresh
+  if `~/.claude-<name>` already exists; N keeps data, Y deletes; non-interactive keeps silently.
+
+- [x] **`claude-proxy update --version <n>`** — pin to a specific tagged release.
+  `install.sh` respects `VERSION` env var; `claude-proxy update --version` passes it through.
+
+- [x] **Active profile display in Claude Code statusline** — `_pc_info()` snippet for
+  `hooks/statusline.sh`, documented in README.
+
+- [x] **GitHub Actions CI** — bats tests + shellcheck on push and pull requests.
+
+- [x] **Shellcheck linting in CI** — shellcheck step alongside bats in GitHub Actions.
+
+- [x] **GitHub Releases with version tags** — tagged releases via GitHub Actions on push.
+
+- [x] **`claude-proxy update` — confirmation + version preview** — fetches latest tag via
+  GitHub API, shows version comparison, asks confirmation; major bump shows prominent warning.
+  Passive `version --check` intentionally skipped — `update` covers the flow and adding
+  network calls to `status` would make it unpredictably slow.
+
+- [x] **IDE restart after `claude-proxy use`** — shared `~/.config/proxied-claude/ide/`
+  dir; all profiles symlink here. No IDE restart needed when switching profiles.
+
+- [x] **Copy `mcpServers` when creating/copying a profile** — `do_copy_settings()` merges
+  `mcpServers` from source `.claude.json`. `python3` is optional — guarded with warn+skip
+  if absent. Conflict detection included.
