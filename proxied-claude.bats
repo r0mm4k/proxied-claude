@@ -405,11 +405,10 @@ Usage: claude-proxy update [--version <tag>]" ;;
         "https://api.github.com/repos/r0mm4k/proxied-claude/releases/latest" \
         2>/dev/null \
         | sed -n 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
-      if [[ -n "$_fetched" ]]; then
-        _target_version="$_fetched"
-      else
-        warn "Could not fetch latest version from GitHub. Installing from main branch."
-      fi
+      [[ -n "$_fetched" ]] || die "Could not fetch latest release from GitHub.
+Pin a version explicitly:
+  claude-proxy update --version vX.Y.Z"
+      _target_version="$_fetched"
     fi
 
     # Already up to date?
@@ -2147,4 +2146,14 @@ run_validate() {
   [[ "$_captured" == *"Major version upgrade"* ]]
   [[ "$_captured" == *"v3.0.0"* ]]
   [[ "$_captured" == *"Aborted"* ]]
+}
+
+@test "update: dies when GitHub API returns no valid version" {
+  _define_helpers
+  VERSION="2.0.0"
+  require_interactive() { :; }
+  curl() { echo '<html>Error 503</html>'; }
+  run cmd_update
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Could not fetch"* ]]
 }
