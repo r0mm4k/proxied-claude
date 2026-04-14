@@ -36,7 +36,7 @@ set -euo pipefail
 #   claude-proxy uninstall       → remove everything
 # ─────────────────────────────────────────────────────────────────────────────
 
-VERSION="2.1.7"
+VERSION="2.1.8"
 
 CONF_DIR="$HOME/.config/proxied-claude"
 PROFILES_DIR="$CONF_DIR/profiles"
@@ -69,6 +69,22 @@ ok()   { echo "✅ $*"; }
 info() { echo "   $*"; }
 warn() { echo "⚠️  $*"; }
 display_path() { printf '%s\n' "${1/#$HOME/~}"; }
+
+# ── URL encoder (RFC 3986) ────────────────────────────────────────────────────
+# Encodes a string for safe use in a URL (username or password component).
+# Pure bash — no subshells, no external tools.
+url_encode() {
+  local string="$1" encoded="" i char
+  for (( i=0; i<${#string}; i++ )); do
+    char="${string:$i:1}"
+    case "$char" in
+      [a-zA-Z0-9._~-]) encoded+="$char" ;;
+      *) printf -v char '%%%02X' "'$char"
+         encoded+="$char" ;;
+    esac
+  done
+  printf '%s' "$encoded"
+}
 
 # ── Core helpers ─────────────────────────────────────────────────────────────
 
@@ -990,7 +1006,7 @@ cmd_proxy() {
         echo "❌ FAILED (host unreachable or port closed)"; exit 1
       fi
 
-      local proxy_url="http://${puser}:${pass}@${phost}"
+      local proxy_url="http://$(url_encode "$puser"):$(url_encode "$pass")@${phost}"
 
       # 2. Proxy auth
       printf "  %-44s" "Proxy authentication ..."

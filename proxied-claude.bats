@@ -383,6 +383,19 @@ EOF
     [[ -t 0 ]] || die "This command requires interactive input (stdin must be a terminal)."
   }
 
+  url_encode() {
+    local string="$1" encoded="" i char
+    for (( i=0; i<${#string}; i++ )); do
+      char="${string:$i:1}"
+      case "$char" in
+        [a-zA-Z0-9._~-]) encoded+="$char" ;;
+        *) printf -v char '%%%02X' "'$char"
+           encoded+="$char" ;;
+      esac
+    done
+    printf '%s' "$encoded"
+  }
+
   cmd_update() {
     local _target_version=""
 
@@ -2169,4 +2182,71 @@ run_validate() {
   run cmd_update
   [ "$status" -ne 0 ]
   [[ "$output" == *"Could not fetch"* ]]
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# url_encode
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@test "url_encode: plain alphanumeric passes through unchanged" {
+  run url_encode "user123"
+  [ "$status" -eq 0 ]
+  [ "$output" = "user123" ]
+}
+
+@test "url_encode: unreserved chars pass through unchanged" {
+  run url_encode "a.b_c~d-e"
+  [ "$status" -eq 0 ]
+  [ "$output" = "a.b_c~d-e" ]
+}
+
+@test "url_encode: at-sign is percent-encoded" {
+  run url_encode "user@domain"
+  [ "$status" -eq 0 ]
+  [ "$output" = "user%40domain" ]
+}
+
+@test "url_encode: colon is percent-encoded" {
+  run url_encode "pa:ss"
+  [ "$status" -eq 0 ]
+  [ "$output" = "pa%3Ass" ]
+}
+
+@test "url_encode: slash is percent-encoded" {
+  run url_encode "pa/ss"
+  [ "$status" -eq 0 ]
+  [ "$output" = "pa%2Fss" ]
+}
+
+@test "url_encode: percent sign itself is percent-encoded" {
+  run url_encode "p%ss"
+  [ "$status" -eq 0 ]
+  [ "$output" = "p%25ss" ]
+}
+
+@test "url_encode: backslash (CORP\\user) is percent-encoded" {
+  run url_encode 'CORP\user'
+  [ "$status" -eq 0 ]
+  [ "$output" = "CORP%5Cuser" ]
+}
+
+@test "url_encode: space is percent-encoded" {
+  run url_encode "pass word"
+  [ "$status" -eq 0 ]
+  [ "$output" = "pass%20word" ]
+}
+
+@test "url_encode: multiple special chars encoded correctly" {
+  run url_encode 'u@d:p/w'
+  [ "$status" -eq 0 ]
+  [ "$output" = "u%40d%3Ap%2Fw" ]
+}
+
+@test "url_encode: proxy URL with special chars in user and password is valid" {
+  local user="CORP\user" pass="p@ss:w/rd"
+  local enc_user enc_pass
+  enc_user="$(url_encode "$user")"
+  enc_pass="$(url_encode "$pass")"
+  local url="http://${enc_user}:${enc_pass}@proxy.corp.com:8080"
+  [[ "$url" == "http://CORP%5Cuser:p%40ss%3Aw%2Frd@proxy.corp.com:8080" ]]
 }

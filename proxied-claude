@@ -45,6 +45,22 @@ read_conf() {
   printf '%s' "$line"
 }
 
+# ── URL encoder (RFC 3986) ────────────────────────────────────────────────────
+# Encodes a string for safe use in a URL (username or password component).
+# Pure bash — no subshells, no external tools.
+url_encode() {
+  local string="$1" encoded="" i char
+  for (( i=0; i<${#string}; i++ )); do
+    char="${string:$i:1}"
+    case "$char" in
+      [a-zA-Z0-9._~-]) encoded+="$char" ;;
+      *) printf -v char '%%%02X' "'$char"
+         encoded+="$char" ;;
+    esac
+  done
+  printf '%s' "$encoded"
+}
+
 # ── Resolve active profile ───────────────────────────────────────────────────
 # PROXIED_CLAUDE_PROFILE overrides global active_profile for this session only.
 # Does not change active_profile file — other terminals and IDE are unaffected.
@@ -100,7 +116,7 @@ if [[ -n "$LINKED_PROXY" ]]; then
   [[ -n "$PASS" ]] || die "Password for proxy '$LINKED_PROXY' not in Keychain.
   Fix: claude-proxy proxy set-password $LINKED_PROXY"
 
-  PROXY_URL="http://${PROXY_USER}:${PASS}@${PROXY_HOST}"
+  PROXY_URL="http://$(url_encode "$PROXY_USER"):$(url_encode "$PASS")@${PROXY_HOST}"
   export HTTPS_PROXY="$PROXY_URL"
   export HTTP_PROXY="$PROXY_URL"
   export NO_PROXY="localhost,127.0.0.1,::1,::ffff:127.0.0.1"
