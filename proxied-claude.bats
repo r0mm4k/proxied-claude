@@ -249,7 +249,9 @@ sys.exit(0 if has_mcp(sys.argv[1]) and has_mcp(sys.argv[2]) else 1)
       if [[ -n "$dst_claude_json" ]]; then dst_cj="$dst_claude_json"
       elif [[ "$dst_dir" == "$HOME/.claude" ]]; then dst_cj="${dst_dir}.json"
       else dst_cj="${dst_dir}/.claude.json"; fi
-      if command -v python3 >/dev/null 2>&1 && python3 -c "
+      if ! command -v python3 >/dev/null 2>&1; then
+        warn "python3 not found — mcpServers not copied"
+      elif python3 -c "
 import json, sys, os
 src_mcp = json.load(open(sys.argv[1])).get('mcpServers', {})
 if not src_mcp: sys.exit(1)
@@ -1053,6 +1055,17 @@ EOF
   echo '{"theme":"dark"}' > "$src/settings.json"
   run do_copy_settings "$src" "$dst" "src" "dst"
   [ "$status" -eq 0 ]
+  [ ! -f "$dst/.claude.json" ]
+}
+
+@test "copy-settings: warns when python3 unavailable and src has mcpServers" {
+  local src="$TEST_DIR/src" dst="$TEST_DIR/dst"
+  mkdir -p "$src" "$dst"
+  printf '{"mcpServers":{"my-server":{"command":"npx"}}}\n' > "$src/.claude.json"
+  python3() { return 1; }
+  run do_copy_settings "$src" "$dst" "src" "dst"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"python3 not found"* ]]
   [ ! -f "$dst/.claude.json" ]
 }
 
