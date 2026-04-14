@@ -36,7 +36,7 @@ set -euo pipefail
 #   claude-proxy uninstall       → remove everything
 # ─────────────────────────────────────────────────────────────────────────────
 
-VERSION="2.1.5"
+VERSION="2.1.6"
 
 CONF_DIR="$HOME/.config/proxied-claude"
 PROFILES_DIR="$CONF_DIR/profiles"
@@ -131,6 +131,36 @@ require_interactive() {
 }
 
 keychain_service() { printf 'claude-proxy:%s\n' "${1}"; }
+
+# Prompt for Y/N confirmation (default no). Returns 0 for Y, 1 otherwise.
+# CR strip handles CRLF line endings from some terminals/redirections.
+confirm() {
+  local _c
+  printf '%s' "$1" >&2; read -r _c
+  _c="${_c%$'\r'}"
+  [[ "${_c:-}" =~ ^[Yy]$ ]]
+}
+
+# Write helpers — single source of truth for conf file format.
+# Add new fields here only; all write sites stay in sync automatically.
+write_profile_conf() {
+  local file="$1" dir="$2" proxy="$3"
+  cat > "$file" <<EOF
+CONFIG_VERSION=1
+PROFILE_CLAUDE_DIR="${dir}"
+PROFILE_PROXY="${proxy}"
+EOF
+}
+
+write_proxy_conf() {
+  local file="$1" host="$2" user="$3" svc="$4"
+  cat > "$file" <<EOF
+CONFIG_VERSION=1
+PROXY_HOST="${host}"
+PROXY_USER="${user}"
+PROXY_KEYCHAIN_SERVICE="${svc}"
+EOF
+}
 
 # Resolve Claude dir for a profile (handles default special case)
 profile_claude_dir() {
@@ -242,9 +272,7 @@ do_copy_settings() {
       warn "${#conflicts[@]} item(s) already exist in '$dst_label' and will be overwritten:"
       for c in "${conflicts[@]}"; do info "  $c"; done
       echo ""
-      printf '%s' "  Overwrite? [y/N] " >&2; read -r _confirm
-      _confirm="${_confirm%$'\r'}"
-      [[ "${_confirm:-}" =~ ^[Yy]$ ]] || return 1
+      confirm "  Overwrite? [y/N] " || return 1
       echo ""
     else
       die "${#conflicts[@]} conflicting item(s) in '$dst_label'. Run interactively to confirm overwrite."
@@ -344,11 +372,7 @@ unlink_proxy_from_profiles() {
     local linked; linked="$(read_conf "$pf" PROFILE_PROXY)"
     if [[ "$linked" == "$proxy_name" ]]; then
       local pdir; pdir="$(read_conf "$pf" PROFILE_CLAUDE_DIR)"
-      cat > "$pf" <<EOF
-CONFIG_VERSION=1
-PROFILE_CLAUDE_DIR="${pdir}"
-PROFILE_PROXY=""
-EOF
+      write_profile_conf "$pf" "$pdir" ""
       info "Unlinked proxy from profile '$(basename "$pf" .conf)'"
     fi
   done
@@ -393,12 +417,7 @@ do_migrate() {
     fi
 
     if [[ ! -f "$PROXIES_DIR/default.conf" ]]; then
-      cat > "$PROXIES_DIR/default.conf" <<EOF
-CONFIG_VERSION=1
-PROXY_HOST="${old_host}"
-PROXY_USER="${old_user}"
-PROXY_KEYCHAIN_SERVICE="${new_svc}"
-EOF
+      write_proxy_conf "$PROXIES_DIR/default.conf" "$old_host" "$old_user" "$new_svc"
       ok "Created proxies/default.conf ($old_user@$old_host)"
     else
       info "proxies/default.conf already exists — skipped"
@@ -408,11 +427,7 @@ EOF
   if [[ ! -f "$PROFILES_DIR/default.conf" ]]; then
     local linked=""
     [[ "$has_proxy" == "true" ]] && linked="default"
-    cat > "$PROFILES_DIR/default.conf" <<EOF
-CONFIG_VERSION=1
-PROFILE_CLAUDE_DIR="$HOME/.claude"
-PROFILE_PROXY="${linked}"
-EOF
+    write_profile_conf "$PROFILES_DIR/default.conf" "$HOME/.claude" "$linked"
     ok "Created profiles/default.conf → $HOME/.claude"
     [[ "$has_proxy" == "true" ]] && info "Proxy 'default' linked"
   else
@@ -420,11 +435,7 @@ EOF
       local _cur_proxy; _cur_proxy="$(read_conf "$PROFILES_DIR/default.conf" PROFILE_PROXY)"
       if [[ -z "$_cur_proxy" ]]; then
         local _cur_dir; _cur_dir="$(read_conf "$PROFILES_DIR/default.conf" PROFILE_CLAUDE_DIR)"
-        cat > "$PROFILES_DIR/default.conf" <<EOF
-CONFIG_VERSION=1
-PROFILE_CLAUDE_DIR="${_cur_dir}"
-PROFILE_PROXY="default"
-EOF
+        write_profile_conf "$PROFILES_DIR/default.conf" "$_cur_dir" "default"
         ok "Linked proxy 'default' to existing profiles/default.conf"
       else
         info "profiles/default.conf already exists — skipped"
@@ -450,11 +461,7 @@ ensure_default_profile() {
   ensure_dirs
   mkdir -p "$CONF_DIR/ide"
   if [[ ! -f "$PROFILES_DIR/default.conf" ]]; then
-    cat > "$PROFILES_DIR/default.conf" <<EOF
-CONFIG_VERSION=1
-PROFILE_CLAUDE_DIR="$HOME/.claude"
-PROFILE_PROXY=""
-EOF
+    write_profile_conf "$PROFILES_DIR/default.conf" "$HOME/.claude" ""
   fi
   if [[ ! -f "$ACTIVE_FILE" || ! -s "$ACTIVE_FILE" ]]; then
     write_active "default"
@@ -559,11 +566,7 @@ cmd_profile() {
       [[ ! -f "$conf" ]] || die "Profile '$name' already exists."
 
       local claude_dir="$HOME/.claude-${name}"
-      cat > "$conf" <<EOF
-CONFIG_VERSION=1
-PROFILE_CLAUDE_DIR="${claude_dir}"
-PROFILE_PROXY=""
-EOF
+      write_profile_conf "$conf" "$claude_dir" ""
       lock_release
 
       local _login_note="Note: you need to log in to Claude the first time you use this profile"
@@ -575,9 +578,7 @@ EOF
           echo "  Your previous session data and settings are preserved."
           echo ""
           local _fresh=""
-          printf '%s' "  Start fresh and delete existing data? [y/N] " >&2; read -r _fresh
-          _fresh="${_fresh%$'\r'}"
-          if [[ "${_fresh:-}" =~ ^[Yy]$ ]]; then
+          if confirm "  Start fresh and delete existing data? [y/N] "; then
             rm -rf "$claude_dir"
           else
             _login_note="Note: If your session expired, log in again when you first use this profile"
@@ -622,9 +623,7 @@ EOF
             if [[ -f "$PROFILES_DIR/${_choice}.conf" ]]; then
               local src_dir; src_dir="$(profile_claude_dir "$_choice")"
               local _inc_proj=0
-              printf '%s' "  Copy projects too? [y/N] " >&2; read -r _proj_choice
-              _proj_choice="${_proj_choice%$'\r'}"
-              [[ "${_proj_choice:-}" =~ ^[Yy]$ ]] && _inc_proj=1
+              confirm "  Copy projects too? [y/N] " && _inc_proj=1
               do_copy_settings "$src_dir" "$claude_dir" "$_choice" "$name" "$_inc_proj" || true
             else
               warn "Profile '$_choice' not found — skipping copy"
@@ -725,11 +724,7 @@ EOF
       require_profile "$name"
       require_proxy   "$proxy"
       local claude_dir; claude_dir="$(profile_claude_dir "$name")"
-      cat > "$PROFILES_DIR/${name}.conf" <<EOF
-CONFIG_VERSION=1
-PROFILE_CLAUDE_DIR="${claude_dir}"
-PROFILE_PROXY="${proxy}"
-EOF
+      write_profile_conf "$PROFILES_DIR/${name}.conf" "$claude_dir" "$proxy"
       ok "Profile '$name' → proxy '$proxy'"
       lock_release
       ;;
@@ -741,11 +736,7 @@ EOF
       validate_name "$name" "profile name"
       require_profile "$name"
       local claude_dir; claude_dir="$(profile_claude_dir "$name")"
-      cat > "$PROFILES_DIR/${name}.conf" <<EOF
-CONFIG_VERSION=1
-PROFILE_CLAUDE_DIR="${claude_dir}"
-PROFILE_PROXY=""
-EOF
+      write_profile_conf "$PROFILES_DIR/${name}.conf" "$claude_dir" ""
       ok "Proxy removed from profile '$name' — will run without proxy"
       lock_release
       ;;
@@ -806,11 +797,7 @@ EOF
         fi
       fi
 
-      cat > "$PROFILES_DIR/${new}.conf" <<EOF
-CONFIG_VERSION=1
-PROFILE_CLAUDE_DIR="${new_dir}"
-PROFILE_PROXY="${proxy}"
-EOF
+      write_profile_conf "$PROFILES_DIR/${new}.conf" "$new_dir" "$proxy"
       rm "$PROFILES_DIR/${old}.conf"
 
       local active; active="$(active_profile)"
@@ -897,12 +884,7 @@ cmd_proxy() {
         lock_release
         die "Proxy '$name' already exists (created concurrently). View: claude-proxy proxy show $name"
       fi
-      cat > "$conf" <<EOF
-CONFIG_VERSION=1
-PROXY_HOST="${host}"
-PROXY_USER="${user}"
-PROXY_KEYCHAIN_SERVICE="${svc}"
-EOF
+      write_proxy_conf "$conf" "$host" "$user" "$svc"
       ok "Proxy '$name' created"
       info "Keychain service : $svc"
       info "Link to a profile: claude-proxy profile set-proxy <profile> $name"
@@ -921,9 +903,7 @@ EOF
         warn "Proxy '$name' is used by profile(s): $used_by"
         warn "Those profiles will be unlinked and run without a proxy."
         require_interactive
-        printf '%s' "Delete anyway? [y/N] " >&2; read -r _confirm
-        _confirm="${_confirm%$'\r'}"
-        [[ "${_confirm:-}" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 0; }
+        confirm "Delete anyway? [y/N] " || { echo "Aborted."; exit 0; }
         echo ""
         # Unlink from all profiles before deleting
         unlink_proxy_from_profiles "$name"
@@ -1069,12 +1049,7 @@ EOF
         warn "Could not migrate Keychain entry — run: claude-proxy proxy set-password $new"
       fi
 
-      cat > "$PROXIES_DIR/${new}.conf" <<EOF
-CONFIG_VERSION=1
-PROXY_HOST="${phost}"
-PROXY_USER="${puser}"
-PROXY_KEYCHAIN_SERVICE="${new_svc}"
-EOF
+      write_proxy_conf "$PROXIES_DIR/${new}.conf" "$phost" "$puser" "$new_svc"
       rm "$PROXIES_DIR/${old}.conf"
 
       # Update linked profiles
@@ -1083,11 +1058,7 @@ EOF
         local linked; linked="$(read_conf "$pf" PROFILE_PROXY)"
         if [[ "$linked" == "$old" ]]; then
           local pdir; pdir="$(read_conf "$pf" PROFILE_CLAUDE_DIR)"
-          cat > "$pf" <<EOF
-CONFIG_VERSION=1
-PROFILE_CLAUDE_DIR="${pdir}"
-PROFILE_PROXY="${new}"
-EOF
+          write_profile_conf "$pf" "$pdir" "$new"
           info "Updated profile '$(basename "$pf" .conf)' → proxy '$new'"
         fi
       done
@@ -1176,9 +1147,7 @@ Pin a version explicitly:
   else
     _prompt_verb="Upgrade"
   fi
-  printf '%s' "$_prompt_verb to $_target_version? [y/N] " >&2; read -r _confirm
-  _confirm="${_confirm%$'\r'}"
-  [[ "${_confirm:-}" =~ ^[Yy]$ ]] || { echo "Aborted."; return 0; }
+  confirm "$_prompt_verb to $_target_version? [y/N] " || { echo "Aborted."; return 0; }
 
   # Install
   echo ""
@@ -1312,9 +1281,7 @@ case "$cmd" in
     echo "Will NOT delete: ~/.claude  ~/.claude-*  (your Claude account data)"
     echo ""
     require_interactive
-    printf '%s' "Are you sure? [y/N] " >&2; read -r _confirm
-    _confirm="${_confirm%$'\r'}"
-    [[ "${_confirm:-}" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 0; }
+    confirm "Are you sure? [y/N] " || { echo "Aborted."; exit 0; }
 
     shopt -s nullglob
     for f in "$PROXIES_DIR"/*.conf; do

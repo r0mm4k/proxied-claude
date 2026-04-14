@@ -51,6 +51,17 @@ validate_name() {
   [[ -n "$name" && "$name" =~ ^[a-zA-Z0-9_-]+$ ]]
 }
 
+# Validate all three proxy wizard inputs; emits warnings and returns 1 on failure.
+validate_proxy_inputs() {
+  local name="$1" host="$2" user="$3"
+  local _ok=true
+  validate_name "${name:-}" || { warn "Invalid proxy name — skipping"; _ok=false; }
+  [[ "${host:-}" =~ ^[^:]+:[0-9]+$ ]] || \
+    { warn "Invalid host format (need hostname:PORT) — skipping"; _ok=false; }
+  [[ -n "${user:-}" ]] || { warn "User cannot be empty — skipping"; _ok=false; }
+  [[ "$_ok" == "true" ]]
+}
+
 if [[ "$IS_UPGRADE" == "1" ]]; then
   echo "== proxied-claude upgrade v${_install_version} =="
 else
@@ -154,13 +165,7 @@ if [[ "${_do_default_proxy:-}" =~ ^[Yy]$ ]]; then
   printf '%s' "Proxy host (IP:PORT):      " >&2; read -r _def_proxy_host
   printf '%s' "Proxy user:                " >&2; read -r _def_proxy_user
 
-  _valid=true
-  validate_name "${_def_proxy_name:-}" || { warn "Invalid proxy name — skipping"; _valid=false; }
-  [[ "${_def_proxy_host:-}" =~ ^[^:]+:[0-9]+$ ]] || \
-    { warn "Invalid host format (need hostname:PORT) — skipping"; _valid=false; }
-  [[ -n "${_def_proxy_user:-}" ]] || { warn "User cannot be empty — skipping"; _valid=false; }
-
-  if [[ "$_valid" == "true" ]]; then
+  if validate_proxy_inputs "${_def_proxy_name:-}" "${_def_proxy_host:-}" "${_def_proxy_user:-}"; then
     "$CTL_PATH" proxy create "$_def_proxy_name" "$_def_proxy_host" "$_def_proxy_user"
     "$CTL_PATH" profile set-proxy default "$_def_proxy_name"
     ok "Proxy '$_def_proxy_name' linked to 'default'"
@@ -187,13 +192,7 @@ if [[ "${_do_profile:-}" =~ ^[Yy]$ ]]; then
       printf '%s' "Proxy host (IP:PORT):      " >&2; read -r _proxy_host
       printf '%s' "Proxy user:                " >&2; read -r _proxy_user
 
-      _valid=true
-      validate_name "${_proxy_name:-}" || { warn "Invalid proxy name — skipping"; _valid=false; }
-      [[ "${_proxy_host:-}" =~ ^[^:]+:[0-9]+$ ]] || \
-        { warn "Invalid host format (need hostname:PORT) — skipping"; _valid=false; }
-      [[ -n "${_proxy_user:-}" ]] || { warn "User cannot be empty — skipping"; _valid=false; }
-
-      if [[ "$_valid" == "true" ]]; then
+      if validate_proxy_inputs "${_proxy_name:-}" "${_proxy_host:-}" "${_proxy_user:-}"; then
         "$CTL_PATH" proxy create "$_proxy_name" "$_proxy_host" "$_proxy_user"
         "$CTL_PATH" profile set-proxy "$_profile_name" "$_proxy_name"
         ok "Proxy '$_proxy_name' linked to '$_profile_name'"

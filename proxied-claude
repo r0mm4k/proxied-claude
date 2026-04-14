@@ -94,6 +94,7 @@ if [[ -n "$LINKED_PROXY" ]]; then
   [[ -n "$PROXY_HOST" ]] || die "Proxy '$LINKED_PROXY' missing PROXY_HOST."
   [[ -n "$PROXY_USER" ]] || die "Proxy '$LINKED_PROXY' missing PROXY_USER."
 
+  # Fallback must match keychain_service() in claude-proxy — update both if naming scheme changes.
   KEYCHAIN_SVC="${KEYCHAIN_SVC:-claude-proxy:${LINKED_PROXY}}"
   PASS="$(security find-generic-password -a "$PROXY_USER" -s "$KEYCHAIN_SVC" -w 2>/dev/null || true)"
   [[ -n "$PASS" ]] || die "Password for proxy '$LINKED_PROXY' not in Keychain.
