@@ -26,8 +26,7 @@ if [[ -z "${VERSION:-}" && -z "${REPO_RAW:-}" ]]; then
   VERSION="$(curl -fsSL --proto '=https' --tlsv1.2 \
     "https://api.github.com/repos/r0mm4k/proxied-claude/releases/latest" \
     2>/dev/null \
-    | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])" 2>/dev/null \
-    || true)"
+    | sed -n 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
   if [[ -z "$VERSION" ]]; then
     echo "ERROR: Could not fetch latest release from GitHub. Pin a version explicitly:" >&2
     echo "  VERSION=vX.Y.Z bash <(curl -fsSL https://raw.githubusercontent.com/r0mm4k/proxied-claude/main/install.sh)" >&2

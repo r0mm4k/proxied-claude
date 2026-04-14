@@ -177,7 +177,7 @@ _define_helpers() {
     fi
     # mcpServers conflict: both src and dst already have mcpServers
     if [[ -n "$src_claude_json" && -n "$dst_claude_json" ]]; then
-      if python3 -c "
+      if command -v python3 >/dev/null 2>&1 && python3 -c "
 import json, sys
 def has_mcp(p): return bool(json.load(open(p)).get('mcpServers'))
 sys.exit(0 if has_mcp(sys.argv[1]) and has_mcp(sys.argv[2]) else 1)
@@ -249,7 +249,7 @@ sys.exit(0 if has_mcp(sys.argv[1]) and has_mcp(sys.argv[2]) else 1)
       if [[ -n "$dst_claude_json" ]]; then dst_cj="$dst_claude_json"
       elif [[ "$dst_dir" == "$HOME/.claude" ]]; then dst_cj="${dst_dir}.json"
       else dst_cj="${dst_dir}/.claude.json"; fi
-      if python3 -c "
+      if command -v python3 >/dev/null 2>&1 && python3 -c "
 import json, sys, os
 src_mcp = json.load(open(sys.argv[1])).get('mcpServers', {})
 if not src_mcp: sys.exit(1)
@@ -404,8 +404,7 @@ Usage: claude-proxy update [--version <tag>]" ;;
       _fetched="$(curl -fsSL --proto '=https' --tlsv1.2 \
         "https://api.github.com/repos/r0mm4k/proxied-claude/releases/latest" \
         2>/dev/null \
-        | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])" 2>/dev/null \
-        || true)"
+        | sed -n 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
       if [[ -n "$_fetched" ]]; then
         _target_version="$_fetched"
       else

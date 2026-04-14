@@ -196,6 +196,7 @@ lock_release() {
 
 # Returns 0 if both .claude.json files contain a non-empty mcpServers key.
 mcp_has_conflict() {
+  command -v python3 >/dev/null 2>&1 || return 1
   python3 -c "
 import json, sys
 def has_mcp(p): return bool(json.load(open(p)).get('mcpServers'))
@@ -206,6 +207,7 @@ sys.exit(0 if has_mcp(sys.argv[1]) and has_mcp(sys.argv[2]) else 1)
 # Copies mcpServers from src .claude.json into dst .claude.json (creates dst if absent).
 # Returns 0 if mcpServers were found and written, 1 if src had none.
 mcp_copy_servers() {
+  command -v python3 >/dev/null 2>&1 || { warn "python3 not found — mcpServers not copied"; return 1; }
   python3 -c "
 import json, sys, os
 src_mcp = json.load(open(sys.argv[1])).get('mcpServers', {})
@@ -1107,8 +1109,7 @@ Usage: claude-proxy update [--version <tag>]" ;;
     _fetched="$(curl -fsSL --proto '=https' --tlsv1.2 \
       "https://api.github.com/repos/r0mm4k/proxied-claude/releases/latest" \
       2>/dev/null \
-      | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])" 2>/dev/null \
-      || true)"
+      | sed -n 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
     [[ -n "$_fetched" ]] || die "Could not fetch latest release from GitHub.
 Pin a version explicitly:
   claude-proxy update --version vX.Y.Z"
