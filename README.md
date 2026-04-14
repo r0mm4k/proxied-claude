@@ -5,7 +5,7 @@ Run [Claude Code](https://docs.anthropic.com/en/docs/claude-code) behind a **cor
 ![macOS only](https://img.shields.io/badge/platform-macOS-lightgrey)
 ![requires Homebrew](https://img.shields.io/badge/requires-Homebrew-blueviolet)
 ![Claude Code](https://img.shields.io/badge/Claude-Code-orange)
-![License MIT](https://img.shields.io/badge/license-MIT-blue)
+![License MIT](https://img.shields.io/badge/license-MIT-yellow)
 [![Tests](https://img.shields.io/github/actions/workflow/status/r0mm4k/proxied-claude/ci.yml?label=tests)](https://github.com/r0mm4k/proxied-claude/actions/workflows/ci.yml)
 ![Version](https://img.shields.io/github/v/release/r0mm4k/proxied-claude)
 
