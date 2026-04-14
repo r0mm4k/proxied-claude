@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
+## [2.1.6] - 2026-04-14
+### Changed
+- Extract confirm, write_profile_conf, write_proxy_conf, validate_proxy_inputs helpers
+
 ## [2.1.5] - 2026-04-14
 ### Fixed
 - Hide login note in copy-settings when user declines overwrite
