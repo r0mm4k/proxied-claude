@@ -77,10 +77,16 @@ else
   echo "Claude not found — installing via Homebrew..."
   command -v brew >/dev/null 2>&1 || die "Homebrew not found. Install: https://brew.sh"
   brew install --cask claude-code
-  CLAUDE_BIN="$(command -v claude)"
+  # PATH may not include new binary yet — check known locations
+  if [[ -x "/opt/homebrew/bin/claude" ]]; then
+    CLAUDE_BIN="/opt/homebrew/bin/claude"
+  elif [[ -x "/usr/local/bin/claude" ]]; then
+    CLAUDE_BIN="/usr/local/bin/claude"
+  else
+    CLAUDE_BIN="$(command -v claude 2>/dev/null)" \
+      || die "Claude not found after brew install. Open a new terminal and retry."
+  fi
 fi
-# Prefer canonical Homebrew path on Apple Silicon
-[[ -x "/opt/homebrew/bin/claude" ]] && CLAUDE_BIN="/opt/homebrew/bin/claude"
 echo "Claude binary: $CLAUDE_BIN"
 
 # ── 2. Config directories ──────────────────────────────────────────────────
