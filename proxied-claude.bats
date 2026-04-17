@@ -452,11 +452,19 @@ Pin a version explicitly:
         echo ""
       fi
 
+      local _lo _prompt_verb _prompt_to="to "
       if [[ "$_installed" == "$_target_version" ]]; then
-        printf '%s' "Reinstall $_target_version? [y/N] " >&2; read -r _confirm
+        _prompt_verb="Reinstall"
+        _prompt_to=""
       else
-        printf '%s' "Upgrade to $_target_version? [y/N] " >&2; read -r _confirm
+        _lo="$(printf '%s\n%s\n' "${VERSION}" "${_target_version#v}" | sort -V | head -1)"
+        if [[ "$_lo" == "${_target_version#v}" ]]; then
+          _prompt_verb="Downgrade"
+        else
+          _prompt_verb="Upgrade"
+        fi
       fi
+      printf '%s' "$_prompt_verb ${_prompt_to}$_target_version? [y/N] " >&2; read -r _confirm
     else
       printf '%s' "Upgrade to latest (main branch)? [y/N] " >&2; read -r _confirm
     fi

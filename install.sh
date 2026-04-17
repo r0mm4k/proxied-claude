@@ -95,6 +95,11 @@ step "Config directories"
 mkdir -p "$CONF_DIR/profiles" "$CONF_DIR/proxies" "$CONF_DIR/ide"
 ok "$CONF_DIR"
 
+# Capture before migration (step 4) or default-profile creation (step 5) may create it.
+# Used in step 6 to detect true first install vs. reinstall.
+_config_existed=0
+[[ -f "$CONF_DIR/profiles/default.conf" ]] && _config_existed=1
+
 # ── 3. Download and install binaries ───────────────────────────────────────
 
 step "Installing proxied-claude (sudo required)"
@@ -160,7 +165,7 @@ if [[ "$IS_UPGRADE" == "1" ]]; then
   exit 0
 fi
 
-if [[ -f "$CONF_DIR/profiles/default.conf" ]]; then
+if [[ "$_config_existed" -eq 1 ]]; then
   echo ""
   ok "Installation complete. Existing config preserved. v$_install_version"
   echo ""

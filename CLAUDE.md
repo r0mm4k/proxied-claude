@@ -6,7 +6,7 @@ Shell utility to run Claude Code behind a corporate HTTP proxy with multi-profil
 
 Three files, clear separation:
 - `proxied-claude` — thin launcher (~135 lines): resolves profile (env var override or active_profile) → fetches Keychain password → ensures `ide/` symlink exists → `exec claude`
-- `claude-proxy` — all management logic: profiles, proxies, migration, lock (~1356 lines)
+- `claude-proxy` — all management logic: profiles, proxies, migration, lock (~1347 lines)
 - `install.sh` — download, patch `__CLAUDE_BIN__`, delegate wizard/migration to claude-proxy
 
 Config lives in `~/.config/proxied-claude/`:
