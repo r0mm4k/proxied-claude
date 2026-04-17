@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
+## [2.2.0] - 2026-04-17
+### Added
+- Add CLAUDE_BIN fallback when baked path is stale
+- Add --force flag to claude-proxy update
+
+### Documentation
+- Update CLAUDE_BIN limitation text for new fallback behavior
+
+### Fixed
+- Remove silent CLAUDE_BIN override in install.sh
+- Skip wizard when config already exists
+- Wizard skip, test helper downgrade sync, CLAUDE.md counts
+
 ## [2.1.8] - 2026-04-14
 ### Fixed
 - Url-encode proxy username and password in proxy URL
