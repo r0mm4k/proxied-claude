@@ -36,7 +36,7 @@ set -euo pipefail
 #   claude-proxy uninstall       → remove everything
 # ─────────────────────────────────────────────────────────────────────────────
 
-VERSION="2.1.8"
+VERSION="2.2.0"
 
 CONF_DIR="$HOME/.config/proxied-claude"
 PROFILES_DIR="$CONF_DIR/profiles"
