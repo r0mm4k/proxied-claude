@@ -22,8 +22,17 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 [[ "$CLAUDE_BIN" != "__CLAUDE_BIN__" ]] || die "Not installed properly.
   Run: bash <(curl -fsSL https://raw.githubusercontent.com/r0mm4k/proxied-claude/main/install.sh)"
 
-[[ -x "$CLAUDE_BIN" ]] || die "Claude binary not found: $CLAUDE_BIN
-  Re-run the installer or reinstall Claude Code."
+if [[ ! -x "$CLAUDE_BIN" ]]; then
+  _fb="$(command -v claude 2>/dev/null)" || true
+  if [[ -n "$_fb" && -x "$_fb" && "$(basename "$_fb")" != "proxied-claude" ]]; then
+    echo "proxied-claude: WARNING: $CLAUDE_BIN not found, using $_fb" >&2
+    echo "proxied-claude: Run 'claude-proxy update --force' to fix permanently." >&2
+    CLAUDE_BIN="$_fb"
+  else
+    die "Claude binary not found: $CLAUDE_BIN
+  Reinstall Claude Code, then run: claude-proxy update --force"
+  fi
+fi
 
 [[ -d "$CONF_DIR" ]] || die "Config not found: $CONF_DIR
   Run: bash <(curl -fsSL https://raw.githubusercontent.com/r0mm4k/proxied-claude/main/install.sh)"

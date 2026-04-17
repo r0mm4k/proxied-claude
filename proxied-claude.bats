@@ -1713,6 +1713,10 @@ EOF
   [ "${count:-0}" -eq 1 ]
 }
 
+@test "architecture: wrapper has CLAUDE_BIN fallback via command -v" {
+  grep -q "command -v claude" "$(dirname "$BATS_TEST_FILENAME")/proxied-claude"
+}
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # profile use
 # ═══════════════════════════════════════════════════════════════════════════════
