@@ -149,7 +149,7 @@ for _pf in "$CONF_DIR/profiles"/*.conf; do
 done
 shopt -u nullglob
 
-# ── 6. First-run wizard (skipped on upgrade) ─────────────────────────────
+# ── 6. First-run wizard (skipped on upgrade or existing config) ──────────
 
 if [[ "$IS_UPGRADE" == "1" ]]; then
   echo ""
@@ -157,6 +157,16 @@ if [[ "$IS_UPGRADE" == "1" ]]; then
   echo ""
   echo "Version : $_install_version"
   echo "Help    : claude-proxy help"
+  exit 0
+fi
+
+if [[ -f "$CONF_DIR/profiles/default.conf" ]]; then
+  echo ""
+  ok "Installation complete. Existing config preserved. v$_install_version"
+  echo ""
+  echo "Run 'hash -r' or open a new terminal if commands aren't found yet."
+  echo ""
+  echo "Full help: claude-proxy help"
   exit 0
 fi
 
