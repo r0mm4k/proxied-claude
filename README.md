@@ -248,6 +248,7 @@ claude-proxy version        # print version
 claude-proxy migrate        # manually trigger v1 → v2 migration
 claude-proxy update                    # re-download latest release from GitHub (preserves all config)
 claude-proxy update --version v2.1.0  # pin to a specific release (also works for downgrade)
+claude-proxy update --force            # re-bake CLAUDE_BIN (after brew ↔ bootstrap switch)
 claude-proxy uninstall      # remove binaries + config (keeps ~/.claude* dirs)
 ```
 
@@ -473,7 +474,7 @@ If files already exist in the destination profile, a summary of conflicts is sho
 
 - **macOS only** — relies on the `security` CLI for Keychain access
 - **HTTP CONNECT proxies only** — SOCKS proxies are not supported by Claude Code
-- `CLAUDE_BIN` path is fixed at install time — re-run `install.sh` if Claude is reinstalled to a different location
+- `CLAUDE_BIN` path is baked at install time — if the path becomes stale, proxied-claude auto-detects claude from PATH and warns; run `claude-proxy update --force` to re-bake permanently
 
 ---
 
