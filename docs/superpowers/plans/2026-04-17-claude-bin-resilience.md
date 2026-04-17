@@ -21,6 +21,7 @@
 | `claude-proxy:35,491-532` | Modify | Update help text and header comment |
 | `proxied-claude.bats:399-412` | Modify | Sync test helper cmd_update with `--force` |
 | `proxied-claude.bats` (append) | Create tests | New tests for `--force` + structural test for fallback |
+| `README.md:249-250` | Modify | Add `--force` to Shortcuts section |
 | `README.md:476` | Modify | Update CLAUDE_BIN limitation text |
 
 ---
@@ -60,7 +61,7 @@ With:
 ```bash
 if [[ ! -x "$CLAUDE_BIN" ]]; then
   _fb="$(command -v claude 2>/dev/null)" || true
-  if [[ -n "$_fb" && -x "$_fb" ]]; then
+  if [[ -n "$_fb" && -x "$_fb" && "$(basename "$_fb")" != "proxied-claude" ]]; then
     echo "proxied-claude: WARNING: $CLAUDE_BIN not found, using $_fb" >&2
     echo "proxied-claude: Run 'claude-proxy update --force' to fix permanently." >&2
     CLAUDE_BIN="$_fb"
@@ -216,10 +217,11 @@ Add after the `update: already up to date` test (after line ~2128):
   _define_helpers
   VERSION="2.0.0"
   require_interactive() { :; }
-  local _api_called=0
+  local _marker; _marker="$(mktemp)"
+  : > "$_marker"   # ensure empty
   curl() {
     if [[ "$*" == *api.github.com* ]]; then
-      _api_called=1
+      echo "CALLED" > "$_marker"
       echo '{"tag_name":"v2.0.0"}'
     else
       echo "INSTALL_SH_DOWNLOADED"
@@ -228,7 +230,8 @@ Add after the `update: already up to date` test (after line ~2128):
   local _out; _out="$(mktemp)"
   printf 'y\n' | cmd_update --force > "$_out" 2>&1
   rm -f "$_out"
-  [ "$_api_called" -eq 1 ]
+  [ -s "$_marker" ]
+  rm -f "$_marker"
 }
 ```
 
@@ -536,10 +539,19 @@ default.conf). Prevents user confusion on reinstall."
 ### Task 5: Documentation updates
 
 **Files:**
-- Modify: `README.md:476`
+- Modify: `README.md:249-250` (Shortcuts section)
+- Modify: `README.md:476` (Limitations section)
 - Modify: `CLAUDE.md` (line count if changed)
 
-- [ ] **Step 1: Update README limitation**
+- [ ] **Step 1: Add `--force` to README Shortcuts section**
+
+After line 250 (`claude-proxy update --version v2.1.0`), add:
+
+```
+claude-proxy update --force            # re-bake CLAUDE_BIN (after brew ↔ bootstrap switch)
+```
+
+- [ ] **Step 2: Update README limitation**
 
 Replace line 476:
 
@@ -553,18 +565,18 @@ With:
 - `CLAUDE_BIN` path is baked at install time — if the path becomes stale, proxied-claude auto-detects claude from PATH and warns; run `claude-proxy update --force` to re-bake permanently
 ```
 
-- [ ] **Step 2: Verify proxied-claude line count for CLAUDE.md**
+- [ ] **Step 3: Verify proxied-claude line count for CLAUDE.md**
 
 Run: `wc -l proxied-claude`
 
 If the line count changed from 127 (currently stated as ~109 in CLAUDE.md), update CLAUDE.md accordingly. The "thin launcher (~109 lines)" count in CLAUDE.md is approximate — update only if significantly different.
 
-- [ ] **Step 3: Run full test suite — final verification**
+- [ ] **Step 4: Run full test suite — final verification**
 
 Run: `bats proxied-claude.bats`
 Expected: all PASS.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add README.md
