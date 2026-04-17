@@ -32,7 +32,7 @@ set -euo pipefail
 #   claude-proxy version / --version / -v
 #   claude-proxy help / --help / -h
 #   claude-proxy migrate         → migrate from v1 proxy.conf
-#   claude-proxy update [--version <tag>]  → update to latest release (preview + confirmation)
+#   claude-proxy update [--force] [--version <tag>]  → update/reinstall (preview + confirmation)
 #   claude-proxy uninstall       → remove everything
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -521,7 +521,7 @@ Shortcuts:
   claude-proxy version        → print version
   claude-proxy help           → show this help
   claude-proxy migrate        → migrate from v1 proxy.conf
-  claude-proxy update [--version <tag>]  → update to latest release (preview + confirmation)
+  claude-proxy update [--force] [--version <tag>]  → update/reinstall (preview + confirmation)
   claude-proxy uninstall      → remove everything
 
 IDE integration (JetBrains / VS Code):
@@ -1102,17 +1102,18 @@ EOF
 }
 
 cmd_update() {
-  local _target_version="" _label="Latest"
+  local _target_version="" _label="Latest" _force=0
 
   # Parse args
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --version)
-        [[ -n "${2:-}" ]] || die "Usage: claude-proxy update --version <tag> (e.g. v2.1.0)"
+        [[ -n "${2:-}" ]] || die "Usage: claude-proxy update [--force] [--version <tag>]"
         _target_version="${2#v}"; _target_version="v${_target_version}"; _label="Target"; shift 2 ;;
+      --force) _force=1; shift ;;
       *)
         die "Unknown option: $1
-Usage: claude-proxy update [--version <tag>]" ;;
+Usage: claude-proxy update [--force] [--version <tag>]" ;;
     esac
   done
 
@@ -1134,7 +1135,7 @@ Pin a version explicitly:
 
   # Already up to date?
   local _installed="v$VERSION"
-  if [[ "$_installed" == "$_target_version" ]]; then
+  if [[ "$_installed" == "$_target_version" && "$_force" -eq 0 ]]; then
     echo "Already up to date: $_installed"
     return 0
   fi
@@ -1156,15 +1157,20 @@ Pin a version explicitly:
     echo ""
   fi
 
-  # Detect direction: downgrade if new < installed
-  local _lo _prompt_verb
-  _lo="$(printf '%s\n%s\n' "${VERSION}" "${_target_version#v}" | sort -V | head -1)"
-  if [[ "$_lo" == "${_target_version#v}" ]]; then
-    _prompt_verb="Downgrade"
+  # Detect direction: reinstall / downgrade / upgrade
+  local _lo _prompt_verb _prompt_to="to "
+  if [[ "$_installed" == "$_target_version" ]]; then
+    _prompt_verb="Reinstall"
+    _prompt_to=""
   else
-    _prompt_verb="Upgrade"
+    _lo="$(printf '%s\n%s\n' "${VERSION}" "${_target_version#v}" | sort -V | head -1)"
+    if [[ "$_lo" == "${_target_version#v}" ]]; then
+      _prompt_verb="Downgrade"
+    else
+      _prompt_verb="Upgrade"
+    fi
   fi
-  confirm "$_prompt_verb to $_target_version? [y/N] " || { echo "Aborted."; return 0; }
+  confirm "$_prompt_verb ${_prompt_to}$_target_version? [y/N] " || { echo "Aborted."; return 0; }
 
   # Install
   echo ""

@@ -397,17 +397,18 @@ EOF
   }
 
   cmd_update() {
-    local _target_version=""
+    local _target_version="" _force=0
 
     # Parse args
     while [[ $# -gt 0 ]]; do
       case "$1" in
         --version)
-          [[ -n "${2:-}" ]] || die "Usage: claude-proxy update --version <tag> (e.g. v2.1.0)"
+          [[ -n "${2:-}" ]] || die "Usage: claude-proxy update [--force] [--version <tag>]"
           _target_version="$2"; shift 2 ;;
+        --force) _force=1; shift ;;
         *)
           die "Unknown option: $1
-Usage: claude-proxy update [--version <tag>]" ;;
+Usage: claude-proxy update [--force] [--version <tag>]" ;;
       esac
     done
 
@@ -428,7 +429,7 @@ Pin a version explicitly:
 
     # Already up to date?
     local _installed="v$VERSION"
-    if [[ -n "$_target_version" && "$_installed" == "$_target_version" ]]; then
+    if [[ -n "$_target_version" && "$_installed" == "$_target_version" && "$_force" -eq 0 ]]; then
       echo "Already up to date: $_installed"
       return 0
     fi
@@ -451,9 +452,13 @@ Pin a version explicitly:
         echo ""
       fi
 
-      read -r -p "Upgrade to $_target_version? [y/N] " _confirm
+      if [[ "$_installed" == "$_target_version" ]]; then
+        printf '%s' "Reinstall $_target_version? [y/N] " >&2; read -r _confirm
+      else
+        printf '%s' "Upgrade to $_target_version? [y/N] " >&2; read -r _confirm
+      fi
     else
-      read -r -p "Upgrade to latest (main branch)? [y/N] " _confirm
+      printf '%s' "Upgrade to latest (main branch)? [y/N] " >&2; read -r _confirm
     fi
     [[ "${_confirm:-}" =~ ^[Yy]$ ]] || { echo "Aborted."; return 0; }
 
@@ -2100,7 +2105,7 @@ run_validate() {
   require_interactive() { :; }
   run cmd_update --version
   [ "$status" -ne 0 ]
-  [[ "$output" == *"Usage: claude-proxy update --version"* ]]
+  [[ "$output" == *"Usage: claude-proxy update [--force]"* ]]
 }
 
 @test "update: non-interactive without --version dies" {
@@ -2129,6 +2134,59 @@ run_validate() {
   run cmd_update
   [ "$status" -eq 0 ]
   [[ "$output" == *"Already up to date: v2.0.0"* ]]
+}
+
+@test "update: --force bypasses already-up-to-date check" {
+  _define_helpers
+  VERSION="2.0.0"
+  require_interactive() { :; }
+  curl() {
+    if [[ "$*" == *api.github.com* ]]; then
+      echo '{"tag_name":"v2.0.0"}'
+    else
+      echo "INSTALL_SH_DOWNLOADED"
+    fi
+  }
+  local _out; _out="$(mktemp)"
+  printf 'y\n' | cmd_update --force > "$_out" 2>&1
+  local _captured; _captured="$(cat "$_out")"; rm -f "$_out"
+  [[ "$_captured" != *"Already up to date"* ]]
+  [[ "$_captured" == *"Reinstall"* ]]
+}
+
+@test "update: --force with --version works" {
+  _define_helpers
+  VERSION="2.0.0"
+  require_interactive() { :; }
+  curl() {
+    echo "INSTALL_SH_DOWNLOADED"
+  }
+  local _out; _out="$(mktemp)"
+  printf 'y\n' | cmd_update --force --version v2.0.0 > "$_out" 2>&1
+  local _captured; _captured="$(cat "$_out")"; rm -f "$_out"
+  [[ "$_captured" != *"Already up to date"* ]]
+  [[ "$_captured" == *"Reinstall"* ]]
+}
+
+@test "update: --force alone fetches version from API" {
+  _define_helpers
+  VERSION="2.0.0"
+  require_interactive() { :; }
+  local _marker; _marker="$(mktemp)"
+  : > "$_marker"   # ensure empty
+  curl() {
+    if [[ "$*" == *api.github.com* ]]; then
+      echo "CALLED" > "$_marker"
+      echo '{"tag_name":"v2.0.0"}'
+    else
+      echo "INSTALL_SH_DOWNLOADED"
+    fi
+  }
+  local _out; _out="$(mktemp)"
+  printf 'y\n' | cmd_update --force > "$_out" 2>&1
+  rm -f "$_out"
+  [ -s "$_marker" ]
+  rm -f "$_marker"
 }
 
 @test "update: fetches new version tag from GitHub API" {
