@@ -160,11 +160,12 @@ confirm() {
 # Write helpers — single source of truth for conf file format.
 # Add new fields here only; all write sites stay in sync automatically.
 write_profile_conf() {
-  local file="$1" dir="$2" proxy="$3"
+  local file="$1" dir="$2" proxy="$3" gateway="${4:-}"
   cat > "$file" <<EOF
 CONFIG_VERSION=1
 PROFILE_CLAUDE_DIR="${dir}"
 PROFILE_PROXY="${proxy}"
+PROFILE_GATEWAY="${gateway}"
 EOF
 }
 
@@ -389,8 +390,9 @@ unlink_proxy_from_profiles() {
   for pf in "$PROFILES_DIR"/*.conf; do
     local linked; linked="$(read_conf "$pf" PROFILE_PROXY)"
     if [[ "$linked" == "$proxy_name" ]]; then
-      local pdir; pdir="$(read_conf "$pf" PROFILE_CLAUDE_DIR)"
-      write_profile_conf "$pf" "$pdir" ""
+      local pdir;    pdir="$(read_conf    "$pf" PROFILE_CLAUDE_DIR)"
+      local gateway; gateway="$(read_conf "$pf" PROFILE_GATEWAY)"
+      write_profile_conf "$pf" "$pdir" "" "$gateway"
       info "Unlinked proxy from profile '$(basename "$pf" .conf)'"
     fi
   done
@@ -445,7 +447,7 @@ do_migrate() {
   if [[ ! -f "$PROFILES_DIR/default.conf" ]]; then
     local linked=""
     [[ "$has_proxy" == "true" ]] && linked="default"
-    write_profile_conf "$PROFILES_DIR/default.conf" "$HOME/.claude" "$linked"
+    write_profile_conf "$PROFILES_DIR/default.conf" "$HOME/.claude" "$linked" ""
     ok "Created profiles/default.conf → $HOME/.claude"
     [[ "$has_proxy" == "true" ]] && info "Proxy 'default' linked"
   else
@@ -453,7 +455,7 @@ do_migrate() {
       local _cur_proxy; _cur_proxy="$(read_conf "$PROFILES_DIR/default.conf" PROFILE_PROXY)"
       if [[ -z "$_cur_proxy" ]]; then
         local _cur_dir; _cur_dir="$(read_conf "$PROFILES_DIR/default.conf" PROFILE_CLAUDE_DIR)"
-        write_profile_conf "$PROFILES_DIR/default.conf" "$_cur_dir" "default"
+        write_profile_conf "$PROFILES_DIR/default.conf" "$_cur_dir" "default" ""
         ok "Linked proxy 'default' to existing profiles/default.conf"
       else
         info "profiles/default.conf already exists — skipped"
@@ -742,7 +744,8 @@ cmd_profile() {
       require_profile "$name"
       require_proxy   "$proxy"
       local claude_dir; claude_dir="$(profile_claude_dir "$name")"
-      write_profile_conf "$PROFILES_DIR/${name}.conf" "$claude_dir" "$proxy"
+      local gateway;    gateway="$(read_conf "$PROFILES_DIR/${name}.conf" PROFILE_GATEWAY)"
+      write_profile_conf "$PROFILES_DIR/${name}.conf" "$claude_dir" "$proxy" "$gateway"
       ok "Profile '$name' → proxy '$proxy'"
       lock_release
       ;;
@@ -754,7 +757,8 @@ cmd_profile() {
       validate_name "$name" "profile name"
       require_profile "$name"
       local claude_dir; claude_dir="$(profile_claude_dir "$name")"
-      write_profile_conf "$PROFILES_DIR/${name}.conf" "$claude_dir" ""
+      local gateway;    gateway="$(read_conf "$PROFILES_DIR/${name}.conf" PROFILE_GATEWAY)"
+      write_profile_conf "$PROFILES_DIR/${name}.conf" "$claude_dir" "" "$gateway"
       ok "Proxy removed from profile '$name' — will run without proxy"
       lock_release
       ;;
@@ -794,7 +798,8 @@ cmd_profile() {
       [[ ! -f "$PROFILES_DIR/${new}.conf" ]] || die "Profile '$new' already exists."
 
       local old_dir; old_dir="$(profile_claude_dir "$old")"
-      local proxy;   proxy="$(read_conf "$PROFILES_DIR/${old}.conf" PROFILE_PROXY)"
+      local proxy;   proxy="$(read_conf   "$PROFILES_DIR/${old}.conf" PROFILE_PROXY)"
+      local gateway; gateway="$(read_conf "$PROFILES_DIR/${old}.conf" PROFILE_GATEWAY)"
 
       local new_dir
       if [[ "$old_dir" == "$HOME/.claude-${old}" ]]; then
@@ -815,7 +820,7 @@ cmd_profile() {
         fi
       fi
 
-      write_profile_conf "$PROFILES_DIR/${new}.conf" "$new_dir" "$proxy"
+      write_profile_conf "$PROFILES_DIR/${new}.conf" "$new_dir" "$proxy" "$gateway"
       rm "$PROFILES_DIR/${old}.conf"
 
       local active; active="$(active_profile)"
@@ -1075,8 +1080,9 @@ cmd_proxy() {
       for pf in "$PROFILES_DIR"/*.conf; do
         local linked; linked="$(read_conf "$pf" PROFILE_PROXY)"
         if [[ "$linked" == "$old" ]]; then
-          local pdir; pdir="$(read_conf "$pf" PROFILE_CLAUDE_DIR)"
-          write_profile_conf "$pf" "$pdir" "$new"
+          local pdir;    pdir="$(read_conf    "$pf" PROFILE_CLAUDE_DIR)"
+          local gateway; gateway="$(read_conf "$pf" PROFILE_GATEWAY)"
+          write_profile_conf "$pf" "$pdir" "$new" "$gateway"
           info "Updated profile '$(basename "$pf" .conf)' → proxy '$new'"
         fi
       done
