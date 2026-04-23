@@ -1925,6 +1925,64 @@ run_validate() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# PROFILE_GATEWAY preservation (regression guard)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@test "profile set-proxy: PROFILE_GATEWAY preserved" {
+  make_profile "work" "corp-lt" "" "corp-gw"
+  make_gateway "corp-gw" "https://litellm.corp.com:4000"
+  do_set_proxy "work" "new-proxy"
+  run read_conf "$PROFILES_DIR/work.conf" PROFILE_GATEWAY
+  [ "$output" = "corp-gw" ]
+}
+
+@test "profile unset-proxy: PROFILE_GATEWAY preserved" {
+  make_profile "work" "corp-lt" "" "corp-gw"
+  do_unset_proxy "work"
+  run read_conf "$PROFILES_DIR/work.conf" PROFILE_GATEWAY
+  [ "$output" = "corp-gw" ]
+}
+
+@test "unlink_proxy_from_profiles: PROFILE_GATEWAY preserved" {
+  make_profile "work" "corp-lt" "" "corp-gw"
+  unlink_proxy_from_profiles "corp-lt"
+  run read_conf "$PROFILES_DIR/work.conf" PROFILE_GATEWAY
+  [ "$output" = "corp-gw" ]
+}
+
+@test "proxy rename: PROFILE_GATEWAY preserved in linked profiles" {
+  # Simulate the proxy rename profile-update loop (production: claude-proxy proxy rename)
+  make_profile "work" "old-proxy" "" "corp-gw"
+  local pdir; pdir="$(read_conf "$PROFILES_DIR/work.conf" PROFILE_CLAUDE_DIR)"
+  local gateway; gateway="$(read_conf "$PROFILES_DIR/work.conf" PROFILE_GATEWAY)"
+  # mirror what the fixed loop in claude-proxy proxy rename does:
+  cat > "$PROFILES_DIR/work.conf" <<EOF
+CONFIG_VERSION=1
+PROFILE_CLAUDE_DIR="${pdir}"
+PROFILE_PROXY="new-proxy"
+PROFILE_GATEWAY="${gateway}"
+EOF
+  run read_conf "$PROFILES_DIR/work.conf" PROFILE_GATEWAY
+  [ "$output" = "corp-gw" ]
+}
+
+@test "profile rename: PROFILE_GATEWAY preserved in new conf" {
+  make_profile "old-name" "corp-lt" "" "corp-gw"
+  local pdir; pdir="$(read_conf "$PROFILES_DIR/old-name.conf" PROFILE_CLAUDE_DIR)"
+  local proxy; proxy="$(read_conf "$PROFILES_DIR/old-name.conf" PROFILE_PROXY)"
+  local gateway; gateway="$(read_conf "$PROFILES_DIR/old-name.conf" PROFILE_GATEWAY)"
+  cat > "$PROFILES_DIR/new-name.conf" <<EOF
+CONFIG_VERSION=1
+PROFILE_CLAUDE_DIR="${pdir}"
+PROFILE_PROXY="${proxy}"
+PROFILE_GATEWAY="${gateway}"
+EOF
+  rm "$PROFILES_DIR/old-name.conf"
+  run read_conf "$PROFILES_DIR/new-name.conf" PROFILE_GATEWAY
+  [ "$output" = "corp-gw" ]
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # profile create / proxy create — conf format
 # ═══════════════════════════════════════════════════════════════════════════════
 
