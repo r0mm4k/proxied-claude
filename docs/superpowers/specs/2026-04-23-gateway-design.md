@@ -121,6 +121,12 @@ Three new test groups:
 - Missing gateway conf → launcher exits with clear error
 - Missing Keychain token → launcher exits with clear error
 
+## Install & Migration
+
+**Wizard:** Gateway setup is NOT added to the install wizard. HTTP proxy is required for network access in corporate environments (forced setup); gateway is an optional auth method — Claude Code works fine without it. A one-line hint is added to the post-install output alongside existing proxy/profile hints.
+
+**Migration:** No migration needed. `PROFILE_GATEWAY` is a new optional field — existing profile confs without it work unchanged. The only change: `GATEWAYS_DIR` is added to `ensure_dirs()` in `claude-proxy` (line ~91), so the `gateways/` directory is created automatically on the first `claude-proxy` invocation after upgrade.
+
 ## Architecture Constraints
 
 - `read_conf` is used everywhere — no `source`/`eval` (injection risk)
