@@ -7,7 +7,7 @@ set -euo pipefail
 #   /usr/local/bin/claude-proxy     — control utility (profiles + proxies)
 #
 # Config: ~/.config/proxied-claude/
-#   profiles/<n>.conf   proxies/<n>.conf   active_profile
+#   profiles/<n>.conf   proxies/<n>.conf   gateways/<n>.conf   active_profile
 #
 # Upgrade (preserves all config and migrates v1 automatically):
 #   claude-proxy update
@@ -61,6 +61,16 @@ validate_proxy_inputs() {
   [[ "$_ok" == "true" ]]
 }
 
+# Validate gateway wizard inputs; emits warnings and returns 1 on failure.
+validate_gateway_inputs() {
+  local name="$1" url="$2"
+  local _ok=true
+  validate_name "${name:-}" || { warn "Invalid gateway name — skipping"; _ok=false; }
+  [[ "${url:-}" =~ ^https?:// ]] || \
+    { warn "Invalid URL (must start with http:// or https://) — skipping"; _ok=false; }
+  [[ "$_ok" == "true" ]]
+}
+
 if [[ "$IS_UPGRADE" == "1" ]]; then
   echo "== proxied-claude upgrade v${_install_version} =="
 else
@@ -92,7 +102,7 @@ echo "Claude binary: $CLAUDE_BIN"
 # ── 2. Config directories ──────────────────────────────────────────────────
 
 step "Config directories"
-mkdir -p "$CONF_DIR/profiles" "$CONF_DIR/proxies" "$CONF_DIR/ide"
+mkdir -p "$CONF_DIR/profiles" "$CONF_DIR/proxies" "$CONF_DIR/gateways" "$CONF_DIR/ide"
 ok "$CONF_DIR"
 
 # Capture before migration (step 4) or default-profile creation (step 5) may create it.
@@ -135,6 +145,7 @@ if [[ ! -f "$CONF_DIR/profiles/default.conf" ]]; then
 CONFIG_VERSION=1
 PROFILE_CLAUDE_DIR="$HOME/.claude"
 PROFILE_PROXY=""
+PROFILE_GATEWAY=""
 EOF
   ok "Created default profile → $HOME/.claude"
 fi
@@ -191,6 +202,18 @@ if [[ "${_do_default_proxy:-}" =~ ^[Yy]$ ]]; then
     ok "Proxy '$_def_proxy_name' linked to 'default'"
   fi
 fi
+
+printf '%s' "Set up an LLM gateway for the 'default' profile? [y/N] " >&2; read -r _do_default_gw
+if [[ "${_do_default_gw:-}" =~ ^[Yy]$ ]]; then
+  printf '%s' "Gateway name (e.g. corp-gw):                       " >&2; read -r _def_gw_name
+  printf '%s' "Gateway URL  (e.g. https://litellm.corp.com:4000): " >&2; read -r _def_gw_url
+
+  if validate_gateway_inputs "${_def_gw_name:-}" "${_def_gw_url:-}"; then
+    "$CTL_PATH" gateway create "$_def_gw_name" "$_def_gw_url"
+    "$CTL_PATH" profile set-gateway default "$_def_gw_name"
+    ok "Gateway '$_def_gw_name' linked to 'default'"
+  fi
+fi
 echo ""
 
 printf '%s' "Create an additional profile now? [y/N] " >&2; read -r _do_profile
@@ -218,6 +241,23 @@ if [[ "${_do_profile:-}" =~ ^[Yy]$ ]]; then
         ok "Proxy '$_proxy_name' linked to '$_profile_name'"
       fi
     fi
+
+    printf '%s' "Add a gateway for '$_profile_name'? [y/N] " >&2; read -r _do_gw
+    if [[ "${_do_gw:-}" =~ ^[Yy]$ ]]; then
+      printf '%s' "Gateway name (e.g. corp-gw):                       " >&2; read -r _gw_name
+      printf '%s' "Gateway URL  (e.g. https://litellm.corp.com:4000): " >&2; read -r _gw_url
+
+      if validate_gateway_inputs "${_gw_name:-}" "${_gw_url:-}"; then
+        # Create only if not already exists (user may reuse a gateway from the default profile)
+        if [[ ! -f "$CONF_DIR/gateways/${_gw_name}.conf" ]]; then
+          "$CTL_PATH" gateway create "$_gw_name" "$_gw_url"
+        else
+          info "Gateway '$_gw_name' already exists — reusing"
+        fi
+        "$CTL_PATH" profile set-gateway "$_profile_name" "$_gw_name"
+        ok "Gateway '$_gw_name' linked to '$_profile_name'"
+      fi
+    fi
   fi
 fi
 
@@ -233,6 +273,8 @@ echo "  claude-proxy profile list"
 echo "  claude-proxy proxy create corp-lt 10.0.0.1:3128 john"
 echo "  claude-proxy profile create work --from default"
 echo "  claude-proxy profile set-proxy work corp-lt"
+echo "  claude-proxy gateway create corp-gw https://litellm.corp.com:4000"
+echo "  claude-proxy profile set-gateway work corp-gw"
 echo "  claude-proxy use work"
 echo "  proxied-claude"
 echo ""
