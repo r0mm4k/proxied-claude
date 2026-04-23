@@ -41,6 +41,7 @@ VERSION="2.2.0"
 CONF_DIR="$HOME/.config/proxied-claude"
 PROFILES_DIR="$CONF_DIR/profiles"
 PROXIES_DIR="$CONF_DIR/proxies"
+GATEWAYS_DIR="$CONF_DIR/gateways"
 ACTIVE_FILE="$CONF_DIR/active_profile"
 LOCK_DIR="$CONF_DIR/.lock"
 LEGACY_CONF="$CONF_DIR/proxy.conf"
@@ -88,7 +89,7 @@ url_encode() {
 
 # ── Core helpers ─────────────────────────────────────────────────────────────
 
-ensure_dirs() { mkdir -p "$PROFILES_DIR" "$PROXIES_DIR"; }
+ensure_dirs() { mkdir -p "$PROFILES_DIR" "$PROXIES_DIR" "$GATEWAYS_DIR"; }
 
 # Returns 0 if dir exists and has data (excluding .DS_Store), 1 otherwise.
 dir_has_data() {
@@ -142,6 +143,11 @@ require_proxy() {
     die "Proxy '$1' does not exist. Run: claude-proxy proxy list"
 }
 
+require_gateway() {
+  [[ -f "$GATEWAYS_DIR/${1}.conf" ]] || \
+    die "Gateway '$1' does not exist. Run: claude-proxy gateway list"
+}
+
 require_interactive() {
   [[ -t 0 ]] || die "This command requires interactive input (stdin must be a terminal)."
 }
@@ -178,6 +184,17 @@ PROXY_USER="${user}"
 PROXY_KEYCHAIN_SERVICE="${svc}"
 EOF
 }
+
+write_gateway_conf() {
+  local file="$1" url="$2" svc="$3"
+  cat > "$file" <<EOF
+CONFIG_VERSION=1
+GATEWAY_URL="${url}"
+GATEWAY_KEYCHAIN_SERVICE="${svc}"
+EOF
+}
+
+gateway_keychain_service() { printf 'claude-proxy-gateway:%s\n' "${1}"; }
 
 # Resolve Claude dir for a profile (handles default special case)
 profile_claude_dir() {
@@ -381,6 +398,32 @@ profiles_using_proxy() {
   done
   shopt -u nullglob
   printf '%s' "$result"
+}
+
+profiles_using_gateway() {
+  local gw_name="$1" result=""
+  shopt -s nullglob
+  for pf in "$PROFILES_DIR"/*.conf; do
+    local linked; linked="$(read_conf "$pf" PROFILE_GATEWAY)"
+    [[ "$linked" == "$gw_name" ]] && result="${result}$(basename "$pf" .conf) "
+  done
+  shopt -u nullglob
+  printf '%s' "$result"
+}
+
+unlink_gateway_from_profiles() {
+  local gw_name="$1"
+  shopt -s nullglob
+  for pf in "$PROFILES_DIR"/*.conf; do
+    local linked; linked="$(read_conf "$pf" PROFILE_GATEWAY)"
+    if [[ "$linked" == "$gw_name" ]]; then
+      local pdir;  pdir="$(read_conf  "$pf" PROFILE_CLAUDE_DIR)"
+      local proxy; proxy="$(read_conf "$pf" PROFILE_PROXY)"
+      write_profile_conf "$pf" "$pdir" "$proxy" ""
+      info "Unlinked gateway from profile '$(basename "$pf" .conf)'"
+    fi
+  done
+  shopt -u nullglob
 }
 
 # Unlink proxy from all profiles that reference it.
