@@ -61,7 +61,9 @@ EOF
 | `profile unset-proxy` | `read_conf "$conf" PROFILE_GATEWAY` |
 | `profile rename` | `read_conf "$old_conf" PROFILE_GATEWAY` |
 | `unlink_proxy_from_profiles` | `read_conf "$pf" PROFILE_GATEWAY` |
+| **`proxy rename` profile-update loop** | **`read_conf "$pf" PROFILE_GATEWAY`** |
 | `ensure_default_profile` / step 5 | `""` |
+| `do_migrate` lines ~448 and ~456 | `""` (migration predates gateways) |
 | `set-gateway` (new) | value being set |
 | `unset-gateway` (new) | `""` |
 
@@ -173,13 +175,15 @@ claude-proxy profile set-gateway work corporate
 
 ### `profile list`
 
-Add GATEWAY column:
+Add GATEWAY column. All four proxy×gateway combinations:
 
 ```
   PROFILE               PROXY               GATEWAY              DIR
   -------               -----               -------              ---
   default               corp-lt             (no gateway)         ~/.claude        ◀ active
   work                  corp-lt             corporate            ~/.claude-work
+  personal              (no proxy)          corporate            ~/.claude-personal
+  bare                  (no proxy)          (no gateway)         ~/.claude-bare
 ```
 
 ### `profile use`
@@ -195,25 +199,55 @@ Add gateway line:
 
 ### `profile show`
 
-Add gateway block (mirrors proxy block pattern):
+Add gateway block (mirrors proxy block pattern). Examples for all four combinations:
 
+**Both proxy and gateway:**
 ```
   Profile        : work  ◀ active
   Claude dir     : ~/.claude-work
   Proxy          : corp-lt
-    Proxy host   : 10.0.0.1:3128
-    Proxy user   : john
+  Proxy host     : 10.0.0.1:3128
+  Proxy user     : john
   Gateway        : corporate
-    Gateway URL  : https://litellm.corp.com:4000
-    Token in KC  : yes
+  Gateway URL    : https://litellm.corp.com:4000
+  Token in KC    : yes
+```
+
+**Gateway only (no proxy):**
+```
+  Profile        : personal
+  Claude dir     : ~/.claude-personal
+  Proxy          : (no proxy)
+  Gateway        : corporate
+  Gateway URL    : https://litellm.corp.com:4000
+  Token in KC    : yes
+```
+
+**Proxy only (no gateway):**
+```
+  Profile        : default  ◀ active
+  Claude dir     : ~/.claude
+  Proxy          : corp-lt
+  Proxy host     : 10.0.0.1:3128
+  Proxy user     : john
+  Gateway        : (no gateway)
+```
+
+**Neither:**
+```
+  Profile        : bare
+  Claude dir     : ~/.claude-bare
+  Proxy          : (no proxy)
+  Gateway        : (no gateway)
 ```
 
 If gateway conf is missing, warn and show fix hint (same pattern as proxy).
 
 ### `profile delete`
 
-Warn about gateway if set (mirrors current proxy warning):
+Warn about gateway if set (mirrors current proxy warning). Only messages for resources that were actually linked:
 
+**Both:**
 ```
 ✅ Profile 'work' deleted
    Claude dir kept on disk: ~/.claude-work
@@ -221,6 +255,18 @@ Warn about gateway if set (mirrors current proxy warning):
    Proxy 'corp-lt' was linked — it still exists, not deleted
    Gateway 'corporate' was linked — it still exists, not deleted
 ```
+
+**Gateway only (no proxy):**
+```
+✅ Profile 'personal' deleted
+   Claude dir kept on disk: ~/.claude-personal
+   To also delete data: rm -rf ~/.claude-personal
+   Gateway 'corporate' was linked — it still exists, not deleted
+```
+
+**Proxy only / neither:** only the proxy line (if any), same as today.
+
+**IMPORTANT:** Both `proxy` and `gateway` must be read from the conf file **before** `rm` — `read_conf` on a deleted file returns `""`.
 
 ### `cmd_status`
 
