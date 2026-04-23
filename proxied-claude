@@ -132,4 +132,28 @@ if [[ -n "$LINKED_PROXY" ]]; then
   export no_proxy="$NO_PROXY"
 fi
 
+# ── Apply gateway if linked ──────────────────────────────────────────────────
+
+LINKED_GATEWAY="$(read_conf "$PROFILE_CONF" PROFILE_GATEWAY)"
+
+if [[ -n "$LINKED_GATEWAY" ]]; then
+  GATEWAY_CONF="$CONF_DIR/gateways/${LINKED_GATEWAY}.conf"
+  [[ -f "$GATEWAY_CONF" ]] || die "Gateway '$LINKED_GATEWAY' (profile '$PROFILE') not found.
+  Fix: claude-proxy profile unset-gateway $PROFILE
+  Or:  claude-proxy gateway create $LINKED_GATEWAY <url>"
+
+  GW_URL="$(read_conf "$GATEWAY_CONF" GATEWAY_URL)"
+  GW_KEYCHAIN_SVC="$(read_conf "$GATEWAY_CONF" GATEWAY_KEYCHAIN_SERVICE)"
+
+  [[ -n "$GW_URL" ]] || die "Gateway '$LINKED_GATEWAY' missing GATEWAY_URL."
+
+  GW_KEYCHAIN_SVC="${GW_KEYCHAIN_SVC:-claude-proxy-gateway:${LINKED_GATEWAY}}"
+  GW_TOKEN="$(security find-generic-password -a "$LINKED_GATEWAY" -s "$GW_KEYCHAIN_SVC" -w 2>/dev/null || true)"
+  [[ -n "$GW_TOKEN" ]] || die "Token for gateway '$LINKED_GATEWAY' not in Keychain.
+  Fix: claude-proxy gateway set-token $LINKED_GATEWAY"
+
+  export ANTHROPIC_BASE_URL="$GW_URL"
+  export ANTHROPIC_AUTH_TOKEN="$GW_TOKEN"
+fi
+
 exec "$CLAUDE_BIN" "$@"

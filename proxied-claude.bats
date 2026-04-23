@@ -2650,3 +2650,79 @@ EOF
   run require_gateway "corp-gw"
   [ "$status" -ne 0 ]
 }
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# wrapper — gateway resolution logic
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@test "wrapper: profile with no gateway has empty PROFILE_GATEWAY" {
+  make_profile "work"
+  run read_conf "$PROFILES_DIR/work.conf" PROFILE_GATEWAY
+  [ "$output" = "" ]
+}
+
+@test "wrapper: old-format profile (no PROFILE_GATEWAY field) — read_conf returns empty" {
+  cat > "$PROFILES_DIR/legacy.conf" <<EOF
+CONFIG_VERSION=1
+PROFILE_CLAUDE_DIR="$HOME/.claude-legacy"
+PROFILE_PROXY=""
+EOF
+  run read_conf "$PROFILES_DIR/legacy.conf" PROFILE_GATEWAY
+  [ "$output" = "" ]
+}
+
+@test "wrapper: profile with gateway has non-empty PROFILE_GATEWAY" {
+  make_profile "work" "" "" "corp-gw"
+  run read_conf "$PROFILES_DIR/work.conf" PROFILE_GATEWAY
+  [ "$output" = "corp-gw" ]
+}
+
+@test "wrapper: gateway conf present — URL readable" {
+  make_profile "work" "" "" "corp-gw"
+  make_gateway "corp-gw" "https://litellm.corp.com:4000"
+  local linked; linked="$(read_conf "$PROFILES_DIR/work.conf" PROFILE_GATEWAY)"
+  run read_conf "$GATEWAYS_DIR/${linked}.conf" GATEWAY_URL
+  [ "$output" = "https://litellm.corp.com:4000" ]
+}
+
+@test "wrapper: gateway conf missing triggers error condition" {
+  make_profile "work" "" "" "corp-gw"
+  local linked; linked="$(read_conf "$PROFILES_DIR/work.conf" PROFILE_GATEWAY)"
+  [ ! -f "$GATEWAYS_DIR/${linked}.conf" ]
+}
+
+@test "wrapper: profile with both proxy and gateway — both confs readable" {
+  make_profile "work" "corp-lt" "" "corp-gw"
+  make_proxy   "corp-lt" "10.0.0.1:3128" "john"
+  make_gateway "corp-gw" "https://litellm.corp.com:4000"
+  run read_conf "$PROXIES_DIR/corp-lt.conf"  PROXY_HOST
+  [ "$output" = "10.0.0.1:3128" ]
+  run read_conf "$GATEWAYS_DIR/corp-gw.conf" GATEWAY_URL
+  [ "$output" = "https://litellm.corp.com:4000" ]
+}
+
+@test "wrapper: gateway keychain service default" {
+  run gateway_keychain_service "corp-gw"
+  [ "$output" = "claude-proxy-gateway:corp-gw" ]
+}
+
+@test "architecture: wrapper reads PROFILE_GATEWAY" {
+  local count
+  count="$(grep -c "PROFILE_GATEWAY\|LINKED_GATEWAY" \
+    "$(dirname "$BATS_TEST_FILENAME")/proxied-claude" 2>/dev/null; true)"
+  [ "${count:-0}" -ge 2 ]
+}
+
+@test "architecture: wrapper exports ANTHROPIC_BASE_URL" {
+  local count
+  count="$(grep -c "ANTHROPIC_BASE_URL" \
+    "$(dirname "$BATS_TEST_FILENAME")/proxied-claude" 2>/dev/null; true)"
+  [ "${count:-0}" -ge 1 ]
+}
+
+@test "architecture: wrapper exports ANTHROPIC_AUTH_TOKEN" {
+  local count
+  count="$(grep -c "ANTHROPIC_AUTH_TOKEN" \
+    "$(dirname "$BATS_TEST_FILENAME")/proxied-claude" 2>/dev/null; true)"
+  [ "${count:-0}" -ge 1 ]
+}
