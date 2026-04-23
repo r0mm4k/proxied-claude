@@ -1,6 +1,6 @@
 # proxied-claude — Claude Code with corporate proxy and multiple accounts (macOS)
 
-Run [Claude Code](https://docs.anthropic.com/en/docs/claude-code) behind a **corporate HTTP proxy** on macOS, with full support for **multiple Claude accounts** (profiles) and **multiple named proxies** — passwords stored securely in **macOS Keychain**.
+Run [Claude Code](https://docs.anthropic.com/en/docs/claude-code) behind a **corporate HTTP proxy** on macOS, with full support for **multiple Claude accounts** (profiles), **multiple named proxies**, and **LLM gateways** (LiteLLM and other `ANTHROPIC_BASE_URL`-compatible gateways) — passwords and tokens stored securely in **macOS Keychain**.
 
 ![macOS only](https://img.shields.io/badge/platform-macOS-lightgrey)
 ![requires Homebrew](https://img.shields.io/badge/requires-Homebrew-blueviolet)
@@ -21,6 +21,7 @@ Developers who:
 - Use **multiple Claude accounts** (e.g. a work Team account and a personal Pro account)
 - Want **separate Claude sessions** per account — different history, login, and settings
 - Use **JetBrains** or **VS Code** with Claude Code and need one command that always picks the right account and proxy
+- Route Claude through an **LLM gateway** (LiteLLM, or any proxy that speaks the Anthropic API) — per profile, with API token stored in Keychain
 
 ---
 
@@ -30,10 +31,13 @@ Developers who:
 proxied-claude
   └─ reads PROXIED_CLAUDE_PROFILE env var (per-session override, optional)
   └─ reads ~/.config/proxied-claude/active_profile (fallback)
-  └─ loads profiles/<n>.conf       → CLAUDE_CONFIG_DIR, linked proxy name
+  └─ loads profiles/<n>.conf       → CLAUDE_CONFIG_DIR, linked proxy name, linked gateway name
   └─ loads proxies/<proxy>.conf    → host, user, keychain service name
-  └─ fetches password from macOS Keychain (never written to disk)
+  └─ fetches proxy password from macOS Keychain (never written to disk)
+  └─ loads gateways/<gw>.conf      → URL, keychain service name  (if gateway is set)
+  └─ fetches gateway token from macOS Keychain (never written to disk)
   └─ exports CLAUDE_CONFIG_DIR (named profiles only) + HTTP_PROXY / HTTPS_PROXY
+  └─ exports ANTHROPIC_BASE_URL + ANTHROPIC_AUTH_TOKEN  (if gateway is set)
   └─ ensures ide/ symlink exists → ~/.config/proxied-claude/ide/
   └─ exec → claude (original binary)
 ```
@@ -198,6 +202,12 @@ claude-proxy profile set-proxy <profile> <proxy>
 claude-proxy profile unset-proxy <profile>
 # Removes proxy link — profile runs with a direct connection
 
+claude-proxy profile set-gateway <profile> <gateway>
+# Links an LLM gateway to a profile — sets ANTHROPIC_BASE_URL + ANTHROPIC_AUTH_TOKEN on launch
+
+claude-proxy profile unset-gateway <profile>
+# Removes gateway link — profile talks directly to the Anthropic API
+
 claude-proxy profile copy-settings <profile> --from <source> [--include-projects]
 # Copies portable config files from <source> to <profile>
 # --include-projects: also copies projects/*/memory/ (project context, not history)
@@ -237,6 +247,31 @@ claude-proxy proxy check <n>
 #   3. Anthropic API reachability via CONNECT tunnel
 ```
 
+### Gateways
+
+Named LLM gateway configurations for routing Claude through LiteLLM or any other `ANTHROPIC_BASE_URL`-compatible proxy. API tokens are stored in macOS Keychain only — never in plain files.
+
+```bash
+claude-proxy gateway list
+# Lists all gateways with URL and which profiles use them
+
+claude-proxy gateway create <n> <url>
+# Creates gateway config + saves API token to Keychain
+
+claude-proxy gateway delete <n>
+# Deletes gateway config + removes Keychain entry
+# Auto-unlinks all profiles that reference the gateway
+
+claude-proxy gateway rename <old> <new>
+# Renames gateway, migrates Keychain entry, updates all linked profiles
+
+claude-proxy gateway set-token <n>
+# Updates API token in Keychain
+
+claude-proxy gateway show <n>
+# Shows gateway details (token is never shown)
+```
+
 ### Shortcuts
 
 ```bash
@@ -269,6 +304,8 @@ claude-proxy uninstall      # remove binaries + config (keeps ~/.claude* dirs)
     default.conf              ← migrated from proxy.conf (if existed)
     corp-lt.conf
     home-de.conf
+  gateways/
+    litellm.conf              ← URL + Keychain service ref (token never on disk)
 
 ~/.claude/                    ← default profile (standard Claude dir)
 ~/.claude-work/               ← isolated session for "work"
@@ -340,6 +377,25 @@ claude-proxy proxy delete corp-lt
 #    Unlinked proxy from profile 'work'
 #    Keychain entry removed
 # ✅ Proxy 'corp-lt' deleted
+```
+
+### Route a profile through an LLM gateway (LiteLLM)
+
+```bash
+# Create a gateway (token is saved to Keychain)
+claude-proxy gateway create litellm http://litellm.corp:4000
+
+# Link it to a profile
+claude-proxy profile set-gateway work litellm
+
+# Launch — ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN are exported automatically
+claude-proxy run work
+```
+
+To stop using the gateway on a profile:
+
+```bash
+claude-proxy profile unset-gateway work
 ```
 
 ### Check proxy health
