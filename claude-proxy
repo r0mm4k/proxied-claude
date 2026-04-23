@@ -806,6 +806,35 @@ cmd_profile() {
       lock_release
       ;;
 
+    set-gateway)
+      lock_acquire
+      local name="${1:-}" gateway="${2:-}"
+      [[ -n "$name" && -n "$gateway" ]] || \
+        die "Usage: claude-proxy profile set-gateway <profile> <gateway>"
+      validate_name "$name"    "profile name"
+      validate_name "$gateway" "gateway name"
+      require_profile "$name"
+      require_gateway "$gateway"
+      local claude_dir; claude_dir="$(profile_claude_dir "$name")"
+      local proxy;      proxy="$(read_conf "$PROFILES_DIR/${name}.conf" PROFILE_PROXY)"
+      write_profile_conf "$PROFILES_DIR/${name}.conf" "$claude_dir" "$proxy" "$gateway"
+      ok "Profile '$name' → gateway '$gateway'"
+      lock_release
+      ;;
+
+    unset-gateway)
+      lock_acquire
+      local name="${1:-}"
+      [[ -n "$name" ]] || die "Usage: claude-proxy profile unset-gateway <profile>"
+      validate_name "$name" "profile name"
+      require_profile "$name"
+      local claude_dir; claude_dir="$(profile_claude_dir "$name")"
+      local proxy;      proxy="$(read_conf "$PROFILES_DIR/${name}.conf" PROFILE_PROXY)"
+      write_profile_conf "$PROFILES_DIR/${name}.conf" "$claude_dir" "$proxy" ""
+      ok "Gateway removed from profile '$name' — will run without gateway"
+      lock_release
+      ;;
+
     copy-settings)
       local name="${1:-}"; shift || true
       [[ -n "$name" ]] || die "Usage: claude-proxy profile copy-settings <profile> --from <source> [--include-projects]"
@@ -886,6 +915,8 @@ Usage:
   claude-proxy profile show    [<n>]
   claude-proxy profile set-proxy     <profile> <proxy>
   claude-proxy profile unset-proxy   <profile>
+  claude-proxy profile set-gateway   <profile> <gateway>
+  claude-proxy profile unset-gateway <profile>
   claude-proxy profile copy-settings <profile> --from <source> [--include-projects]
 EOF
       exit 1
@@ -1150,6 +1181,182 @@ EOF
   esac
 }
 
+# ── gateway subcommands ──────────────────────────────────────────────────────
+
+cmd_gateway() {
+  local sub="${1:-}"; shift || true
+
+  case "$sub" in
+
+    create)
+      require_interactive
+      local name="${1:-}" url="${2:-}"
+      [[ -n "$name" && -n "$url" ]] || \
+        die "Usage: claude-proxy gateway create <n> <url>"
+      validate_name "$name" "gateway name"
+      [[ "$url" =~ ^https?:// ]] || \
+        die "Invalid URL '$url'. Must start with http:// or https://"
+      ensure_dirs
+      local conf="$GATEWAYS_DIR/${name}.conf"
+      local svc; svc="$(gateway_keychain_service "$name")"
+      [[ ! -f "$conf" ]] || die "Gateway '$name' already exists. View: claude-proxy gateway show $name"
+      echo "Creating gateway '$name' ($url)"
+      echo "Enter gateway token (stored in macOS Keychain):"
+      security add-generic-password -a "$name" -s "$svc" -U -w
+      lock_acquire
+      if [[ -f "$conf" ]]; then
+        security delete-generic-password -a "$name" -s "$svc" 2>/dev/null || true
+        lock_release
+        die "Gateway '$name' already exists (created concurrently). View: claude-proxy gateway show $name"
+      fi
+      write_gateway_conf "$conf" "$url" "$svc"
+      ok "Gateway '$name' created"
+      info "Keychain service : $svc"
+      info "Link to a profile: claude-proxy profile set-gateway <profile> $name"
+      lock_release
+      ;;
+
+    list)
+      ensure_dirs
+      shopt -s nullglob
+      local files=("$GATEWAYS_DIR"/*.conf)
+      shopt -u nullglob
+      if [[ ${#files[@]} -eq 0 ]]; then
+        echo "  (no gateways yet — run: claude-proxy gateway create <n> <url>)"
+        return
+      fi
+      echo ""
+      printf "  %-20s  %-45s  %s\n" "GATEWAY" "URL" "USED BY PROFILES"
+      printf "  %-20s  %-45s  %s\n" "-------" "---" "----------------"
+      for f in "${files[@]}"; do
+        local gname; gname="$(basename "$f" .conf)"
+        local gurl;  gurl="$(read_conf "$f" GATEWAY_URL)"
+        local used_by; used_by="$(profiles_using_gateway "$gname")"
+        printf "  %-20s  %-45s  %s\n" \
+          "$gname" "${gurl:-(no url)}" "${used_by:-(unused)}"
+      done
+      echo ""
+      ;;
+
+    show)
+      local name="${1:-}"
+      [[ -n "$name" ]] || die "Usage: claude-proxy gateway show <n>"
+      validate_name "$name" "gateway name"
+      require_gateway "$name"
+      local gurl; gurl="$(read_conf "$GATEWAYS_DIR/${name}.conf" GATEWAY_URL)"
+      local gsvc; gsvc="$(read_conf "$GATEWAYS_DIR/${name}.conf" GATEWAY_KEYCHAIN_SERVICE)"
+      gsvc="${gsvc:-$(gateway_keychain_service "$name")}"
+      local has_token="no"
+      security find-generic-password -a "$name" -s "$gsvc" -w &>/dev/null && has_token="yes"
+      echo ""
+      echo "  Gateway          : $name"
+      echo "  URL              : ${gurl:-?}"
+      echo "  Keychain service : $gsvc"
+      echo "  Token in KC      : $has_token"
+      echo ""
+      ;;
+
+    delete)
+      lock_acquire
+      local name="${1:-}"
+      [[ -n "$name" ]] || die "Usage: claude-proxy gateway delete <n>"
+      validate_name "$name" "gateway name"
+      require_gateway "$name"
+
+      local used_by; used_by="$(profiles_using_gateway "$name")"
+      if [[ -n "$used_by" ]]; then
+        warn "Gateway '$name' is used by profile(s): $used_by"
+        warn "Those profiles will be unlinked and run without a gateway."
+        require_interactive
+        confirm "Delete anyway? [y/N] " || { echo "Aborted."; exit 0; }
+        echo ""
+        unlink_gateway_from_profiles "$name"
+      fi
+
+      local gsvc; gsvc="$(read_conf "$GATEWAYS_DIR/${name}.conf" GATEWAY_KEYCHAIN_SERVICE)"
+      gsvc="${gsvc:-$(gateway_keychain_service "$name")}"
+      if security delete-generic-password -a "$name" -s "$gsvc" >/dev/null 2>&1; then
+        info "Keychain entry removed"
+      else
+        info "Keychain entry not found (skipped)"
+      fi
+      rm "$GATEWAYS_DIR/${name}.conf"
+      ok "Gateway '$name' deleted"
+      lock_release
+      ;;
+
+    rename)
+      lock_acquire
+      local old="${1:-}" new="${2:-}"
+      [[ -n "$old" && -n "$new" ]] || die "Usage: claude-proxy gateway rename <old> <new>"
+      validate_name "$old" "gateway name"
+      validate_name "$new" "gateway name"
+      require_gateway "$old"
+      [[ ! -f "$GATEWAYS_DIR/${new}.conf" ]] || die "Gateway '$new' already exists."
+
+      local gurl; gurl="$(read_conf "$GATEWAYS_DIR/${old}.conf" GATEWAY_URL)"
+      local old_svc; old_svc="$(read_conf "$GATEWAYS_DIR/${old}.conf" GATEWAY_KEYCHAIN_SERVICE)"
+      old_svc="${old_svc:-$(gateway_keychain_service "$old")}"
+      local new_svc; new_svc="$(gateway_keychain_service "$new")"
+
+      # Migrate Keychain entry
+      local token
+      token="$(security find-generic-password -a "$old" -s "$old_svc" -w 2>/dev/null || true)"
+      if [[ -n "$token" ]]; then
+        security add-generic-password -a "$new" -s "$new_svc" -w "$token" -U >/dev/null 2>&1 || true
+        security delete-generic-password -a "$old" -s "$old_svc" >/dev/null 2>&1 || true
+        info "Keychain entry renamed: $old_svc → $new_svc"
+      else
+        warn "Could not migrate Keychain entry — run: claude-proxy gateway set-token $new"
+      fi
+
+      write_gateway_conf "$GATEWAYS_DIR/${new}.conf" "$gurl" "$new_svc"
+      rm "$GATEWAYS_DIR/${old}.conf"
+
+      # Update linked profiles
+      shopt -s nullglob
+      for pf in "$PROFILES_DIR"/*.conf; do
+        local linked; linked="$(read_conf "$pf" PROFILE_GATEWAY)"
+        if [[ "$linked" == "$old" ]]; then
+          local pdir;  pdir="$(read_conf  "$pf" PROFILE_CLAUDE_DIR)"
+          local proxy; proxy="$(read_conf "$pf" PROFILE_PROXY)"
+          write_profile_conf "$pf" "$pdir" "$proxy" "$new"
+          info "Updated profile '$(basename "$pf" .conf)' → gateway '$new'"
+        fi
+      done
+      shopt -u nullglob
+      ok "Gateway '$old' renamed → '$new'"
+      lock_release
+      ;;
+
+    set-token)
+      require_interactive
+      local name="${1:-}"
+      [[ -n "$name" ]] || die "Usage: claude-proxy gateway set-token <n>"
+      validate_name "$name" "gateway name"
+      require_gateway "$name"
+      local gsvc; gsvc="$(read_conf "$GATEWAYS_DIR/${name}.conf" GATEWAY_KEYCHAIN_SERVICE)"
+      gsvc="${gsvc:-$(gateway_keychain_service "$name")}"
+      echo "Enter new token for gateway '$name':"
+      security add-generic-password -a "$name" -s "$gsvc" -U -w
+      ok "Token updated in Keychain"
+      ;;
+
+    *)
+      cat <<'EOF'
+Usage:
+  claude-proxy gateway create <n> <url>
+  claude-proxy gateway list
+  claude-proxy gateway show  <n>
+  claude-proxy gateway delete <n>
+  claude-proxy gateway rename  <old> <new>
+  claude-proxy gateway set-token <n>
+EOF
+      exit 1
+      ;;
+  esac
+}
+
 cmd_update() {
   local _target_version="" _label="Latest" _force=0
 
@@ -1317,6 +1524,7 @@ cmd="${1:-}"; shift || true
 case "$cmd" in
   profile) cmd_profile "$@" ;;
   proxy)   cmd_proxy   "$@" ;;
+  gateway) cmd_gateway "$@" ;;
 
   use)
     [[ -n "${1:-}" ]] || die "Usage: claude-proxy use <profile>"

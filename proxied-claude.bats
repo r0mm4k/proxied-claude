@@ -2444,3 +2444,209 @@ EOF
   local url="http://${enc_user}:${enc_pass}@proxy.corp.com:8080"
   [[ "$url" == "http://CORP%5Cuser:p%40ss%3Aw%2Frd@proxy.corp.com:8080" ]]
 }
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# gateway create
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@test "gateway create: conf has all required keys" {
+  make_gateway "corp-gw" "https://litellm.corp.com:4000"
+  run read_conf "$GATEWAYS_DIR/corp-gw.conf" CONFIG_VERSION
+  [ "$output" = "1" ]
+  run read_conf "$GATEWAYS_DIR/corp-gw.conf" GATEWAY_URL
+  [ "$output" = "https://litellm.corp.com:4000" ]
+  run read_conf "$GATEWAYS_DIR/corp-gw.conf" GATEWAY_KEYCHAIN_SERVICE
+  [ "$output" = "claude-proxy-gateway:corp-gw" ]
+}
+
+@test "gateway create: keychain service name matches gateway name" {
+  make_gateway "my-gw" "https://gw.example.com"
+  run read_conf "$GATEWAYS_DIR/my-gw.conf" GATEWAY_KEYCHAIN_SERVICE
+  [ "$output" = "claude-proxy-gateway:my-gw" ]
+}
+
+@test "gateway create: gateway_keychain_service returns correct format" {
+  run gateway_keychain_service "corp-gw"
+  [ "$output" = "claude-proxy-gateway:corp-gw" ]
+}
+
+@test "gateway create: duplicate blocked — conf already exists" {
+  make_gateway "corp-gw" "https://litellm.corp.com:4000"
+  [ -f "$GATEWAYS_DIR/corp-gw.conf" ]
+  run require_gateway "corp-gw"
+  [ "$status" -eq 0 ]
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# gateway list
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@test "profiles_using_gateway: returns empty for unknown gateway" {
+  run profiles_using_gateway "nonexistent"
+  [ "$output" = "" ]
+}
+
+@test "gateway list: profiles_using_gateway finds linked profile" {
+  make_profile "work" "" "" "corp-gw"
+  run profiles_using_gateway "corp-gw"
+  [[ "$output" == *"work"* ]]
+}
+
+@test "gateway list: profiles_using_gateway empty when not linked" {
+  make_profile "work"
+  run profiles_using_gateway "corp-gw"
+  [ "$output" = "" ]
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# gateway show
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@test "gateway show: reads URL from conf" {
+  make_gateway "corp-gw" "https://litellm.corp.com:4000"
+  run read_conf "$GATEWAYS_DIR/corp-gw.conf" GATEWAY_URL
+  [ "$output" = "https://litellm.corp.com:4000" ]
+}
+
+@test "gateway show: reads keychain service from conf" {
+  make_gateway "corp-gw" "https://litellm.corp.com:4000"
+  run read_conf "$GATEWAYS_DIR/corp-gw.conf" GATEWAY_KEYCHAIN_SERVICE
+  [ "$output" = "claude-proxy-gateway:corp-gw" ]
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# gateway delete
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@test "gateway delete: removes conf file" {
+  make_gateway "corp-gw" "https://litellm.corp.com:4000"
+  [ -f "$GATEWAYS_DIR/corp-gw.conf" ]
+  rm "$GATEWAYS_DIR/corp-gw.conf"
+  [ ! -f "$GATEWAYS_DIR/corp-gw.conf" ]
+}
+
+@test "gateway delete: unlinks from all profiles" {
+  make_profile "work"    "" "" "corp-gw"
+  make_profile "personal" "" "" "corp-gw"
+  make_gateway "corp-gw" "https://litellm.corp.com:4000"
+  unlink_gateway_from_profiles "corp-gw"
+  run read_conf "$PROFILES_DIR/work.conf" PROFILE_GATEWAY
+  [ "$output" = "" ]
+  run read_conf "$PROFILES_DIR/personal.conf" PROFILE_GATEWAY
+  [ "$output" = "" ]
+}
+
+@test "gateway delete: unlink preserves PROFILE_PROXY" {
+  make_profile "work" "corp-lt" "" "corp-gw"
+  unlink_gateway_from_profiles "corp-gw"
+  run read_conf "$PROFILES_DIR/work.conf" PROFILE_PROXY
+  [ "$output" = "corp-lt" ]
+}
+
+@test "gateway delete: profiles not using gateway are untouched" {
+  make_profile "work"     "" "" "corp-gw"
+  make_profile "personal" "" "" "other-gw"
+  unlink_gateway_from_profiles "corp-gw"
+  run read_conf "$PROFILES_DIR/personal.conf" PROFILE_GATEWAY
+  [ "$output" = "other-gw" ]
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# gateway rename
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@test "gateway rename: new conf exists, old removed" {
+  make_gateway "old-gw" "https://litellm.corp.com:4000"
+  cp "$GATEWAYS_DIR/old-gw.conf" "$GATEWAYS_DIR/new-gw.conf"
+  rm "$GATEWAYS_DIR/old-gw.conf"
+  [ -f "$GATEWAYS_DIR/new-gw.conf" ]
+  [ ! -f "$GATEWAYS_DIR/old-gw.conf" ]
+}
+
+@test "gateway rename: updates linked profiles" {
+  make_profile "work" "" "" "old-gw"
+  make_gateway "old-gw" "https://litellm.corp.com:4000"
+  local pdir; pdir="$(read_conf "$PROFILES_DIR/work.conf" PROFILE_CLAUDE_DIR)"
+  local proxy; proxy="$(read_conf "$PROFILES_DIR/work.conf" PROFILE_PROXY)"
+  cat > "$PROFILES_DIR/work.conf" <<EOF
+CONFIG_VERSION=1
+PROFILE_CLAUDE_DIR="${pdir}"
+PROFILE_PROXY="${proxy}"
+PROFILE_GATEWAY="new-gw"
+EOF
+  run read_conf "$PROFILES_DIR/work.conf" PROFILE_GATEWAY
+  [ "$output" = "new-gw" ]
+}
+
+@test "gateway rename: URL preserved in new conf" {
+  make_gateway "old-gw" "https://litellm.corp.com:4000"
+  cp "$GATEWAYS_DIR/old-gw.conf" "$GATEWAYS_DIR/new-gw.conf"
+  run read_conf "$GATEWAYS_DIR/new-gw.conf" GATEWAY_URL
+  [ "$output" = "https://litellm.corp.com:4000" ]
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# profile set-gateway / unset-gateway
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@test "profile set-gateway: PROFILE_GATEWAY written" {
+  make_profile "work"
+  make_gateway "corp-gw" "https://litellm.corp.com:4000"
+  local dir;   dir="$(profile_claude_dir "work")"
+  local proxy; proxy="$(read_conf "$PROFILES_DIR/work.conf" PROFILE_PROXY)"
+  cat > "$PROFILES_DIR/work.conf" <<EOF
+CONFIG_VERSION=1
+PROFILE_CLAUDE_DIR="${dir}"
+PROFILE_PROXY="${proxy}"
+PROFILE_GATEWAY="corp-gw"
+EOF
+  run read_conf "$PROFILES_DIR/work.conf" PROFILE_GATEWAY
+  [ "$output" = "corp-gw" ]
+}
+
+@test "profile set-gateway: PROFILE_PROXY preserved" {
+  make_profile "work" "corp-lt"
+  make_gateway "corp-gw" "https://litellm.corp.com:4000"
+  local dir; dir="$(profile_claude_dir "work")"
+  cat > "$PROFILES_DIR/work.conf" <<EOF
+CONFIG_VERSION=1
+PROFILE_CLAUDE_DIR="${dir}"
+PROFILE_PROXY="corp-lt"
+PROFILE_GATEWAY="corp-gw"
+EOF
+  run read_conf "$PROFILES_DIR/work.conf" PROFILE_PROXY
+  [ "$output" = "corp-lt" ]
+}
+
+@test "profile unset-gateway: PROFILE_GATEWAY cleared" {
+  make_profile "work" "" "" "corp-gw"
+  local dir;   dir="$(profile_claude_dir "work")"
+  local proxy; proxy="$(read_conf "$PROFILES_DIR/work.conf" PROFILE_PROXY)"
+  cat > "$PROFILES_DIR/work.conf" <<EOF
+CONFIG_VERSION=1
+PROFILE_CLAUDE_DIR="${dir}"
+PROFILE_PROXY="${proxy}"
+PROFILE_GATEWAY=""
+EOF
+  run read_conf "$PROFILES_DIR/work.conf" PROFILE_GATEWAY
+  [ "$output" = "" ]
+}
+
+@test "profile unset-gateway: PROFILE_PROXY preserved" {
+  make_profile "work" "corp-lt" "" "corp-gw"
+  local dir; dir="$(profile_claude_dir "work")"
+  cat > "$PROFILES_DIR/work.conf" <<EOF
+CONFIG_VERSION=1
+PROFILE_CLAUDE_DIR="${dir}"
+PROFILE_PROXY="corp-lt"
+PROFILE_GATEWAY=""
+EOF
+  run read_conf "$PROFILES_DIR/work.conf" PROFILE_PROXY
+  [ "$output" = "corp-lt" ]
+}
+
+@test "profile set-gateway: non-existent gateway — require_gateway fails" {
+  make_profile "work"
+  run require_gateway "corp-gw"
+  [ "$status" -ne 0 ]
+}
