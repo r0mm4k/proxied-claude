@@ -13,6 +13,8 @@ set -euo pipefail
 #   claude-proxy profile show    [<n>]
 #   claude-proxy profile set-proxy     <profile> <proxy>
 #   claude-proxy profile unset-proxy   <profile>
+#   claude-proxy profile set-gateway   <profile> <gateway>
+#   claude-proxy profile unset-gateway <profile>
 #   claude-proxy profile copy-settings <profile> --from <source> [--include-projects]
 #
 # Proxy commands:
@@ -23,6 +25,14 @@ set -euo pipefail
 #   claude-proxy proxy set-password <n>
 #   claude-proxy proxy show  <n>
 #   claude-proxy proxy check <n>
+#
+# Gateway commands:
+#   claude-proxy gateway list
+#   claude-proxy gateway create <n> <url>
+#   claude-proxy gateway delete <n>
+#   claude-proxy gateway rename  <old> <new>
+#   claude-proxy gateway set-token <n>
+#   claude-proxy gateway show  <n>
 #
 # Shortcuts:
 #   claude-proxy use <n>      → profile use
@@ -536,7 +546,7 @@ ensure_default_profile() {
 print_help() {
   cat <<EOF
 
-claude-proxy $VERSION — manage Claude Code profiles and proxies
+claude-proxy $VERSION — manage Claude Code profiles, proxies and gateways
 
 Profile commands:
   claude-proxy profile list
@@ -547,6 +557,8 @@ Profile commands:
   claude-proxy profile show    [<n>]
   claude-proxy profile set-proxy     <profile> <proxy>
   claude-proxy profile unset-proxy   <profile>
+  claude-proxy profile set-gateway   <profile> <gateway>
+  claude-proxy profile unset-gateway <profile>
   claude-proxy profile copy-settings <profile> --from <source> [--include-projects]
 
 Proxy commands:
@@ -557,6 +569,14 @@ Proxy commands:
   claude-proxy proxy set-password <n>
   claude-proxy proxy show  <n>
   claude-proxy proxy check <n>
+
+Gateway commands:
+  claude-proxy gateway list
+  claude-proxy gateway create <n> <url>
+  claude-proxy gateway delete <n>
+  claude-proxy gateway rename  <old> <new>
+  claude-proxy gateway set-token <n>
+  claude-proxy gateway show  <n>
 
 Shortcuts:
   claude-proxy use <n>        → profile use
@@ -593,15 +613,17 @@ cmd_profile() {
         return
       fi
       echo ""
-      printf "  %-20s  %-18s  %-30s\n" "PROFILE" "PROXY" "DIR"
-      printf "  %-20s  %-18s  %-30s\n" "-------" "-----" "---"
+      printf "  %-20s  %-18s  %-18s  %-30s\n" "PROFILE" "PROXY" "GATEWAY" "DIR"
+      printf "  %-20s  %-18s  %-18s  %-30s\n" "-------" "-----" "-------" "---"
       for f in "${files[@]}"; do
         local name; name="$(basename "$f" .conf)"
         local proxy;     proxy="$(read_conf "$f" PROFILE_PROXY)"
+        local gateway;   gateway="$(read_conf "$f" PROFILE_GATEWAY)"
         local claude_dir; claude_dir="$(profile_claude_dir "$name")"
         local marker=""; [[ "$name" == "$active" ]] && marker="◀ active"
-        printf "  %-20s  %-18s  %-30s  %s\n" \
-          "$name" "${proxy:-(no proxy)}" "$(display_path "$claude_dir")" "$marker"
+        printf "  %-20s  %-18s  %-18s  %-30s  %s\n" \
+          "$name" "${proxy:-(no proxy)}" "${gateway:-(no gateway)}" \
+          "$(display_path "$claude_dir")" "$marker"
       done
       echo ""
       ;;
@@ -722,12 +744,14 @@ cmd_profile() {
       [[ "$name" != "$active" ]] || die "Cannot delete the active profile '$name'.
   Switch first: claude-proxy use <other-profile>"
       local claude_dir; claude_dir="$(profile_claude_dir "$name")"
-      local proxy; proxy="$(read_conf "$PROFILES_DIR/${name}.conf" PROFILE_PROXY)"
+      local proxy;   proxy="$(read_conf   "$PROFILES_DIR/${name}.conf" PROFILE_PROXY)"
+      local gateway; gateway="$(read_conf "$PROFILES_DIR/${name}.conf" PROFILE_GATEWAY)"
       rm "$PROFILES_DIR/${name}.conf"
       ok "Profile '$name' deleted"
       info "Claude dir kept on disk: $(display_path "$claude_dir")"
       info "To also delete data: rm -rf $(display_path "$claude_dir")"
-      [[ -n "$proxy" ]] && info "Proxy '$proxy' was linked — it still exists, not deleted"
+      [[ -n "$proxy" ]]   && info "Proxy '$proxy' was linked — it still exists, not deleted"
+      [[ -n "$gateway" ]] && info "Gateway '$gateway' was linked — it still exists, not deleted"
       lock_release
       ;;
 
@@ -740,9 +764,11 @@ cmd_profile() {
       write_active "$name"
       local claude_dir; claude_dir="$(profile_claude_dir "$name")"
       local proxy; proxy="$(read_conf "$PROFILES_DIR/${name}.conf" PROFILE_PROXY)"
+      local gateway; gateway="$(read_conf "$PROFILES_DIR/${name}.conf" PROFILE_GATEWAY)"
       ok "Switched to profile '$name'"
       info "Claude dir : $(display_path "$claude_dir")"
       info "Proxy      : ${proxy:-(no proxy)}"
+      info "Gateway    : ${gateway:-(no gateway)}"
       lock_release
       ;;
 
@@ -772,6 +798,22 @@ cmd_profile() {
         else
           warn "Proxy '$proxy' config is missing!"
           info "Fix: claude-proxy profile unset-proxy $target"
+        fi
+      fi
+      local gateway; gateway="$(read_conf "$PROFILES_DIR/${target}.conf" PROFILE_GATEWAY)"
+      echo "  Gateway        : ${gateway:-(no gateway)}"
+      if [[ -n "$gateway" ]]; then
+        local gconf="$GATEWAYS_DIR/${gateway}.conf"
+        if [[ -f "$gconf" ]]; then
+          echo "  Gateway URL    : $(read_conf "$gconf" GATEWAY_URL)"
+          local gsvc; gsvc="$(read_conf "$gconf" GATEWAY_KEYCHAIN_SERVICE)"
+          gsvc="${gsvc:-$(gateway_keychain_service "$gateway")}"
+          local has_token="no"
+          security find-generic-password -a "$gateway" -s "$gsvc" -w &>/dev/null && has_token="yes"
+          echo "  Token in KC    : $has_token"
+        else
+          warn "Gateway '$gateway' config is missing!"
+          info "Fix: claude-proxy profile unset-gateway $target"
         fi
       fi
       echo ""
@@ -1430,7 +1472,7 @@ Pin a version explicitly:
 
   # Install
   echo ""
-  echo "Your profiles, proxies and settings are preserved."
+  echo "Your profiles, proxies, gateways and settings are preserved."
   echo ""
   _TMP="$(mktemp)"
   trap 'rm -f "$_TMP"' EXIT
@@ -1460,6 +1502,12 @@ cmd_status() {
       warn "Proxy '$_proxy' config is missing!"
     fi
   fi
+  local _gateway; _gateway="$(read_conf "$PROFILES_DIR/${_active}.conf" PROFILE_GATEWAY)"
+  echo "  Gateway    : ${_gateway:-(no gateway)}"
+  if [[ -n "$_gateway" ]]; then
+    local _gconf="$GATEWAYS_DIR/${_gateway}.conf"
+    [[ -f "$_gconf" ]] && echo "  URL        : $(read_conf "$_gconf" GATEWAY_URL)"
+  fi
   echo ""
   echo "  ── All profiles ───────────────────────────────"
   shopt -s nullglob
@@ -1468,12 +1516,13 @@ cmd_status() {
   if [[ ${#_pfiles[@]} -eq 0 ]]; then
     echo "  (none)"
   else
-    local _f _n _lp _marker
+    local _f _n _lp _gw _marker
     for _f in "${_pfiles[@]}"; do
       _n="$(basename "$_f" .conf)"
       _lp="$(read_conf "$_f" PROFILE_PROXY)"
+      _gw="$(read_conf "$_f" PROFILE_GATEWAY)"
       _marker=""; [[ "$_n" == "$_active" ]] && _marker=" ◀"
-      printf "  %-20s  %s%s\n" "$_n" "${_lp:-(no proxy)}" "$_marker"
+      printf "  %-20s  %-18s  %s%s\n" "$_n" "${_lp:-(no proxy)}" "${_gw:-(no gateway)}" "$_marker"
     done
   fi
   echo ""
@@ -1490,6 +1539,21 @@ cmd_status() {
       _h="$(read_conf "$_f" PROXY_HOST)"
       _u="$(read_conf "$_f" PROXY_USER)"
       printf "  %-20s  %s@%s\n" "$_n" "${_u:-?}" "${_h:-?}"
+    done
+  fi
+  echo ""
+  echo "  ── All gateways ───────────────────────────────"
+  shopt -s nullglob
+  local -a _gfiles=("$GATEWAYS_DIR"/*.conf)
+  shopt -u nullglob
+  if [[ ${#_gfiles[@]} -eq 0 ]]; then
+    echo "  (none)"
+  else
+    local _f _n _u
+    for _f in "${_gfiles[@]}"; do
+      _n="$(basename "$_f" .conf)"
+      _u="$(read_conf "$_f" GATEWAY_URL)"
+      printf "  %-20s  %s\n" "$_n" "${_u:-?}"
     done
   fi
   echo ""
@@ -1555,8 +1619,8 @@ case "$cmd" in
     echo "This will remove:"
     echo "  $WRAPPER_PATH"
     echo "  $CTL_PATH"
-    echo "  $CONF_DIR (all profiles, proxy configs, active_profile, shared ide/)"
-    echo "  All Keychain entries for managed proxies"
+    echo "  $CONF_DIR (all profiles, proxy configs, gateway configs, active_profile, shared ide/)"
+    echo "  All Keychain entries for managed proxies and gateways"
     echo ""
     echo "Will NOT delete: ~/.claude  ~/.claude-*  (your Claude account data)"
     echo ""
@@ -1569,6 +1633,16 @@ case "$cmd" in
       _s="$(read_conf "$f" PROXY_KEYCHAIN_SERVICE)"
       _s="${_s:-$(keychain_service "$(basename "$f" .conf)")}"
       security delete-generic-password -a "${_u:-}" -s "$_s" >/dev/null 2>&1 && \
+        info "Keychain removed: $_s" || true
+    done
+    shopt -u nullglob
+
+    shopt -s nullglob
+    for f in "$GATEWAYS_DIR"/*.conf; do
+      _n="$(basename "$f" .conf)"
+      _s="$(read_conf "$f" GATEWAY_KEYCHAIN_SERVICE)"
+      _s="${_s:-$(gateway_keychain_service "$_n")}"
+      security delete-generic-password -a "$_n" -s "$_s" >/dev/null 2>&1 && \
         info "Keychain removed: $_s" || true
     done
     shopt -u nullglob
