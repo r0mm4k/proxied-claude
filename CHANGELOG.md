@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
+## [2.3.0] - 2026-04-23
+### Added
+- Add gateway infrastructure (GATEWAYS_DIR, helpers, ensure_dirs)
+- Gateway create/list/show/delete/rename/set-token and profile set/unset-gateway
+- Add gateway info to profile list, show, use, delete, status; update help text, header, uninstall
+- Launcher reads PROFILE_GATEWAY and exports ANTHROPIC_BASE_URL/AUTH_TOKEN
+- Install.sh — gateways dir, wizard blocks, updated hints
+- Gateway support — LiteLLM and other LLM gateways via ANTHROPIC_BASE_URL
+
+### Documentation
+- Add claude-proxy doctor design spec
+- Update doctor spec — fix review findings (rev 2)
+- Add gateway support design spec
+- Update gateway spec — install/migration notes
+- Update gateway spec — wizard, install, dirs
+- Update gateway spec — full review pass (rev 2)
+- Add gateway implementation plan
+- Review pass on gateway plan and spec
+
+### Fixed
+- Write_profile_conf preserves PROFILE_GATEWAY at all call sites
+
 ## [2.2.0] - 2026-04-17
 ### Added
 - Add CLAUDE_BIN fallback when baked path is stale
