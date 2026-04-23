@@ -26,9 +26,10 @@ setup() {
   export CONF_DIR="$TEST_DIR/proxied-claude"
   export PROFILES_DIR="$CONF_DIR/profiles"
   export PROXIES_DIR="$CONF_DIR/proxies"
+  export GATEWAYS_DIR="$CONF_DIR/gateways"
   export ACTIVE_FILE="$CONF_DIR/active_profile"
   export LOCK_DIR="$CONF_DIR/.lock"
-  mkdir -p "$PROFILES_DIR" "$PROXIES_DIR"
+  mkdir -p "$PROFILES_DIR" "$PROXIES_DIR" "$GATEWAYS_DIR"
   unset PROXIED_CLAUDE_PROFILE
   _define_helpers
 }
@@ -288,11 +289,13 @@ open(sys.argv[2], 'w').write(json.dumps(dst, indent=2) + '\n')
     for pf in "$PROFILES_DIR"/*.conf; do
       local linked; linked="$(read_conf "$pf" PROFILE_PROXY)"
       if [[ "$linked" == "$proxy_name" ]]; then
-        local pdir; pdir="$(read_conf "$pf" PROFILE_CLAUDE_DIR)"
+        local pdir;    pdir="$(read_conf    "$pf" PROFILE_CLAUDE_DIR)"
+        local gateway; gateway="$(read_conf "$pf" PROFILE_GATEWAY)"
         cat > "$pf" <<EOF
 CONFIG_VERSION=1
 PROFILE_CLAUDE_DIR="${pdir}"
 PROFILE_PROXY=""
+PROFILE_GATEWAY="${gateway}"
 EOF
         info "Unlinked proxy from profile '$(basename "$pf" .conf)'"
       fi
@@ -315,12 +318,13 @@ EOF
   }
 
   make_profile() {
-    local name="$1" proxy="${2:-}" dir="${3:-}"
+    local name="$1" proxy="${2:-}" dir="${3:-}" gateway="${4:-}"
     [[ -z "$dir" ]] && { [[ "$name" == "default" ]] && dir="$HOME/.claude" || dir="$HOME/.claude-${name}"; }
     cat > "$PROFILES_DIR/${name}.conf" <<EOF
 CONFIG_VERSION=1
 PROFILE_CLAUDE_DIR="${dir}"
 PROFILE_PROXY="${proxy}"
+PROFILE_GATEWAY="${gateway}"
 EOF
   }
 
@@ -333,25 +337,87 @@ PROXY_KEYCHAIN_SERVICE="claude-proxy:${1}"
 EOF
   }
 
+  make_gateway() {
+    local name="$1" url="$2"
+    local svc="claude-proxy-gateway:${name}"
+    cat > "$GATEWAYS_DIR/${name}.conf" <<EOF
+CONFIG_VERSION=1
+GATEWAY_URL="${url}"
+GATEWAY_KEYCHAIN_SERVICE="${svc}"
+EOF
+  }
+
+  write_gateway_conf() {
+    local file="$1" url="$2" svc="$3"
+    cat > "$file" <<EOF
+CONFIG_VERSION=1
+GATEWAY_URL="${url}"
+GATEWAY_KEYCHAIN_SERVICE="${svc}"
+EOF
+  }
+
+  gateway_keychain_service() { printf 'claude-proxy-gateway:%s\n' "${1}"; }
+
+  require_gateway() {
+    local name="$1"
+    [[ -f "$GATEWAYS_DIR/${name}.conf" ]] || \
+      { echo "ERROR: Gateway '$name' does not exist." >&2; return 1; }
+  }
+
+  profiles_using_gateway() {
+    local gw_name="$1" result=""
+    shopt -s nullglob
+    for pf in "$PROFILES_DIR"/*.conf; do
+      local linked; linked="$(read_conf "$pf" PROFILE_GATEWAY)"
+      [[ "$linked" == "$gw_name" ]] && result="${result}$(basename "$pf" .conf) "
+    done
+    shopt -u nullglob
+    printf '%s' "$result"
+  }
+
+  unlink_gateway_from_profiles() {
+    local gw_name="$1"
+    shopt -s nullglob
+    for pf in "$PROFILES_DIR"/*.conf; do
+      local linked; linked="$(read_conf "$pf" PROFILE_GATEWAY)"
+      if [[ "$linked" == "$gw_name" ]]; then
+        local pdir;  pdir="$(read_conf  "$pf" PROFILE_CLAUDE_DIR)"
+        local proxy; proxy="$(read_conf "$pf" PROFILE_PROXY)"
+        cat > "$pf" <<EOF
+CONFIG_VERSION=1
+PROFILE_CLAUDE_DIR="${pdir}"
+PROFILE_PROXY="${proxy}"
+PROFILE_GATEWAY=""
+EOF
+        info "Unlinked gateway from profile '$(basename "$pf" .conf)'"
+      fi
+    done
+    shopt -u nullglob
+  }
+
   # Mirrors cmd_profile set-proxy logic from claude-proxy
   do_set_proxy() {
     local name="$1" proxy="$2"
-    local dir; dir="$(profile_claude_dir "$name")"
+    local dir;     dir="$(profile_claude_dir "$name")"
+    local gateway; gateway="$(read_conf "$PROFILES_DIR/${name}.conf" PROFILE_GATEWAY)"
     cat > "$PROFILES_DIR/${name}.conf" <<EOF
 CONFIG_VERSION=1
 PROFILE_CLAUDE_DIR="${dir}"
 PROFILE_PROXY="${proxy}"
+PROFILE_GATEWAY="${gateway}"
 EOF
   }
 
   # Mirrors cmd_profile unset-proxy logic from claude-proxy
   do_unset_proxy() {
     local name="$1"
-    local dir; dir="$(profile_claude_dir "$name")"
+    local dir;     dir="$(profile_claude_dir "$name")"
+    local gateway; gateway="$(read_conf "$PROFILES_DIR/${name}.conf" PROFILE_GATEWAY)"
     cat > "$PROFILES_DIR/${name}.conf" <<EOF
 CONFIG_VERSION=1
 PROFILE_CLAUDE_DIR="${dir}"
 PROFILE_PROXY=""
+PROFILE_GATEWAY="${gateway}"
 EOF
   }
 
