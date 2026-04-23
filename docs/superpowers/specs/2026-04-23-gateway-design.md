@@ -123,13 +123,86 @@ Three new test groups:
 
 ## Install & Migration
 
-**Wizard:** Gateway setup is NOT added to the install wizard. HTTP proxy is required for network access in corporate environments (forced setup); gateway is an optional auth method — Claude Code works fine without it. A one-line hint is added to the post-install output alongside existing proxy/profile hints.
+### `install.sh` changes
 
-**Migration:** No migration needed. `PROFILE_GATEWAY` is a new optional field — existing profile confs without it work unchanged. The only change: `GATEWAYS_DIR` is added to `ensure_dirs()` in `claude-proxy` (line ~91), so the `gateways/` directory is created automatically on the first `claude-proxy` invocation after upgrade.
+**Step 2 — Config directories (line 95):** Add `gateways/` to `mkdir`:
+```bash
+mkdir -p "$CONF_DIR/profiles" "$CONF_DIR/proxies" "$CONF_DIR/gateways" "$CONF_DIR/ide"
+```
+
+**Step 2 — Header comment (line 10):** Update to mention `gateways/`:
+```
+#   profiles/<n>.conf   proxies/<n>.conf   gateways/<n>.conf   active_profile
+```
+
+**New function `validate_gateway_inputs`** — placed alongside `validate_proxy_inputs`:
+```bash
+# Validate gateway wizard inputs; emits warnings and returns 1 on failure.
+validate_gateway_inputs() {
+  local name="$1" url="$2"
+  local _ok=true
+  validate_name "${name:-}" || { warn "Invalid gateway name — skipping"; _ok=false; }
+  [[ "${url:-}" =~ ^https?:// ]] || \
+    { warn "Invalid URL (must start with http:// or https://) — skipping"; _ok=false; }
+  [[ "$_ok" == "true" ]]
+}
+```
+
+**Wizard — default profile** (after proxy block, before `echo ""`):
+```bash
+printf '%s' "Set up an LLM gateway for the 'default' profile? [y/N] " >&2; read -r _do_default_gw
+if [[ "${_do_default_gw:-}" =~ ^[Yy]$ ]]; then
+  printf '%s' "Gateway name (e.g. corp-gw):                    " >&2; read -r _def_gw_name
+  printf '%s' "Gateway URL  (e.g. https://litellm.corp.com:4000): " >&2; read -r _def_gw_url
+
+  if validate_gateway_inputs "${_def_gw_name:-}" "${_def_gw_url:-}"; then
+    "$CTL_PATH" gateway create "$_def_gw_name" "$_def_gw_url"
+    "$CTL_PATH" profile set-gateway default "$_def_gw_name"
+    ok "Gateway '$_def_gw_name' linked to 'default'"
+    info "Store the token: claude-proxy gateway set-token $_def_gw_name"
+  fi
+fi
+```
+
+**Wizard — additional profile** (after proxy block for `$_profile_name`, before closing `fi`):
+```bash
+printf '%s' "Add a gateway for '$_profile_name'? [y/N] " >&2; read -r _do_gw
+if [[ "${_do_gw:-}" =~ ^[Yy]$ ]]; then
+  printf '%s' "Gateway name (e.g. corp-gw):                       " >&2; read -r _gw_name
+  printf '%s' "Gateway URL  (e.g. https://litellm.corp.com:4000): " >&2; read -r _gw_url
+
+  if validate_gateway_inputs "${_gw_name:-}" "${_gw_url:-}"; then
+    "$CTL_PATH" gateway create "$_gw_name" "$_gw_url"
+    "$CTL_PATH" profile set-gateway "$_profile_name" "$_gw_name"
+    ok "Gateway '$_gw_name' linked to '$_profile_name'"
+    info "Store the token: claude-proxy gateway set-token $_gw_name"
+  fi
+fi
+```
+
+Note: `gateway create` in wizard does NOT call `set-token` — consistent with proxy wizard not calling `set-password`. The `info` line reminds the user what to do next. If a gateway with the same name already exists (e.g. user enters same name for default and additional profile), `gateway create` must handle gracefully (skip creation, still link).
+
+**Quick start hints** — add one line after existing proxy/profile examples:
+```
+echo "  claude-proxy gateway create corp-gw https://litellm.corp.com:4000"
+```
+
+### Migration
+
+No migration needed. `PROFILE_GATEWAY` is a new optional field — existing profile confs without it work unchanged. Existing installs get `gateways/` created automatically on the first `claude-proxy` invocation after upgrade (via `ensure_dirs()` — see `claude-proxy` changes below).
+
+### `claude-proxy` changes for dirs
+
+`ensure_dirs()` (line ~91) — add `GATEWAYS_DIR`:
+```bash
+GATEWAYS_DIR="$CONF_DIR/gateways"
+ensure_dirs() { mkdir -p "$PROFILES_DIR" "$PROXIES_DIR" "$GATEWAYS_DIR"; }
+```
 
 ## Architecture Constraints
 
 - `read_conf` is used everywhere — no `source`/`eval` (injection risk)
 - Token never written to conf files — Keychain only
 - `gateway delete` checks all profile confs for `PROFILE_GATEWAY=<name>` before deleting; Keychain entry is **not** deleted automatically (user may have the same token stored for other purposes — they remove it manually if needed)
-- `gateways/` directory created alongside `proxies/` during install (or lazily on first `gateway create`)
+- `gateway create` is idempotent on name collision: if conf already exists, skip creation but do not error — wizard can safely call it even if user enters the same gateway name for multiple profiles
+- `gateways/` directory created in step 2 of install, and in `ensure_dirs()` for upgrades
